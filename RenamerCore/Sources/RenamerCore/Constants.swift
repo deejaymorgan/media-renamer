@@ -87,7 +87,8 @@ public enum Constants {
     /// restructured (so running on a parent like ~/Media is safe).
     public static let ignoredFolderNames: Set<String> = ["movies", "music", "tv"]
 
-    /// Case-insensitive name fragments that mark obvious junk regardless of
-    /// extension. (Used by the junk detector — a later milestone.)
-    static let junkNamePatterns: [String] = ["sample", "screens", "proof", "thumbs"]
+    /// Case-insensitive name fragments that mark junk regardless of extension —
+    /// substring forms of data.py's `sample`, `screens?`, `proof`, `thumbs?`
+    /// regexes, so "screen"/"screens"/"screenshots" and "thumb"/"thumbs" match.
+    static let junkNamePatterns: [String] = ["sample", "screen", "proof", "thumb"]
 }
