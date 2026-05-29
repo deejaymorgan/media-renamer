@@ -138,9 +138,11 @@ Verbatim behaviour from `~/Dev/tv-show-renamer`, pinned by parity tests:
   existing-on-disk targets are skipped.
 - **Library folders** (`Movies/Music/TV`) and hidden/metadata files are ignored.
 
-**Status:** parsing, title formatting, year/episode detection, and sidecar
-language detection are **ported and parity-tested** (`RenamerCore`). Planning,
-conflict detection, junk, and execution are next (see roadmap).
+**Status:** the engine is **MVP-complete and parity-tested** (`RenamerCore`):
+parsing/formatting, year & episode detection, sidecar language handling,
+planning, conflict detection, and execution (apply moves + `rmdir`-empty +
+native Trash). The remaining MVP work is the SwiftUI app — preview + apply
+button — built in Xcode. Junk *detection* is done; the junk *panel* is M4.
 
 ---
 
@@ -163,10 +165,10 @@ settings, packaging.
 
 | Milestone | Adds |
 |---|---|
-| **M0 — Parsing core** ✅* | `RenamerCore` parsing/formatting/sidecar rules, parity-tested (*pending first `swift test` once the Xcode license is accepted) |
-| **M1 — Plan model** | Folder scan, `RenamePlan` document model, `PlanBuilder`, `ConflictChecker` — all tested |
+| **M0 — Parsing core** ✅ | `RenamerCore` parsing/formatting/sidecar rules, parity-tested |
+| **M1 — Plan model** ✅ | Folder scan, `PlanBuilder`, `ConflictChecker` — all parity-tested |
 | **M2 — Preview UI** | SwiftUI app: pick folder → read-only preview (needs Xcode) |
-| **M3 — Apply** | `Executor` + `Trasher`; Apply button; result log; conflict/exists skipping |
+| **M3 — Apply** | engine ✅ (`Executor` + `Trasher`, conflict/exists skipping, tested); Apply button + result log (UI) pending |
 | **M4 — Junk + acronyms** | Junk panel (checkboxes → Trash); acronym toggle chips (full CLI parity reached here) |
 | **M5 — Quality of life** | Editable titles before apply; remembered settings (recent folders, acronyms) |
 | **M6 — Undo** | Reverse the last applied batch in one action |
