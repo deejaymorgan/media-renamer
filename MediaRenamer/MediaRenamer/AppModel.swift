@@ -23,9 +23,13 @@ final class AppModel {
 
     /// All-caps words found in the current folder (acronym candidates).
     private(set) var acronymWords: [String] = []
-    /// User overrides per word; words without an override use the default rule.
-    /// Persisted across launches, so a word keeps its decision between folders.
+    /// User overrides per word; persisted across launches.
     private(set) var acronymModes: [String: AcronymMode] = [:]
+
+    /// Junk the user chose to KEEP (unchecked). Everything else is trashed.
+    private(set) var keptJunk: Set<URL> = []
+    /// Outcome of the most recent Apply.
+    private(set) var lastResult: ApplyResult?
 
     init() {
         if let data = UserDefaults.standard.data(forKey: Self.acronymDefaultsKey),
@@ -36,25 +40,24 @@ final class AppModel {
 
     func choose(_ url: URL) {
         folderURL = url
+        keptJunk = []
         acronymWords = PlanBuilder.allCapsWords(root: url)
         selection = nil
         rebuildPlan()
     }
 
-    /// The decision for a word: a user override, else the default (keep ≤4 chars).
+    // MARK: Acronyms
+
     func mode(for word: String) -> AcronymMode {
         acronymModes[word] ?? (word.count <= 4 ? .keep : .title)
     }
 
-    /// Change a word's decision, remember it, and re-plan the whole folder live.
     func setMode(_ mode: AcronymMode, for word: String) {
         acronymModes[word] = mode
         persistAcronymModes()
         rebuildPlan()
     }
 
-    /// Engine acronym map — only "keep" words need an entry (title mode is the
-    /// engine's default for unknown all-caps words).
     private var acronymMap: [String: String] {
         var map: [String: String] = [:]
         for word in acronymWords where mode(for: word) == .keep { map[word] = word }
@@ -70,14 +73,48 @@ final class AppModel {
         }
     }
 
-    /// Apply a title/year edit to one item and re-detect conflicts. No-ops if
-    /// nothing changed (keeps live editing cheap and flicker-free).
+    // MARK: Editing
+
+    /// Apply a title/year edit to one item and re-detect conflicts.
     func replan(itemSource: URL, title: String, year: String) {
         guard let plan,
               let node = plan.nodes.first(where: { $0.source == itemSource }),
               node.editTitle != title || node.editYear != year
         else { return }
         self.plan = PlanBuilder.replan(plan, itemSource: itemSource, title: title, year: year)
+    }
+
+    // MARK: Junk
+
+    func isJunkTrashed(_ url: URL) -> Bool { !keptJunk.contains(url) }
+
+    func setJunkTrashed(_ url: URL, _ trash: Bool) {
+        if trash { keptJunk.remove(url) } else { keptJunk.insert(url) }
+    }
+
+    /// Junk approved for the Trash (everything not explicitly kept).
+    var junkToTrash: [URL] {
+        (plan?.nodes.flatMap { $0.junk } ?? []).filter { !keptJunk.contains($0) }
+    }
+
+    // MARK: Apply
+
+    /// Trash approved junk, perform the renames, then re-scan the folder.
+    /// (Synchronous for now — fine for typical folders; move off-main if needed.)
+    func apply() {
+        guard let plan, let folderURL else { return }
+        lastResult = Executor.apply(plan, trashing: junkToTrash, using: SystemTrasher())
+        selection = nil
+        choose(folderURL)   // re-scan the now-renamed tree
+    }
+
+    var lastResultSummary: String? {
+        guard let r = lastResult else { return nil }
+        var parts = ["Moved \(r.movedCount)"]
+        if r.trashedCount > 0 { parts.append("Trashed \(r.trashedCount)") }
+        if r.conflictCount > 0 { parts.append("Skipped \(r.conflictCount)") }
+        if r.errorCount > 0 { parts.append("Errors \(r.errorCount)") }
+        return parts.joined(separator: " · ")
     }
 
     // MARK: Persistence
@@ -112,18 +149,14 @@ struct PlanGroups {
 }
 
 extension NodePlan {
-    /// The original folder/file name, for display.
     var originalName: String { source.lastPathComponent }
 
-    /// The destination directory (filename dropped) — the item's friendly name
-    /// in the list/inspector, e.g. "Breaking Bad/Season 1".
     var destinationDirectory: String {
         guard let first = previewPairs.first else { return originalName }
         let parts = first.new.split(separator: "/")
         return parts.count > 1 ? parts.dropLast().joined(separator: "/") : first.new
     }
 
-    /// Whether any of this node's moves collide with another's destination.
     func isConflicted(in conflicts: Set<URL>) -> Bool {
         operations.contains { op in
             if case let .move(from, _) = op { return conflicts.contains(from) }

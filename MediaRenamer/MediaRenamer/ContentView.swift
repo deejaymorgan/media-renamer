@@ -5,6 +5,8 @@ import RenamerCore
 struct ContentView: View {
     @State private var model = AppModel()
     @State private var importing = false
+    @State private var confirming = false
+    @State private var showResult = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -31,7 +33,7 @@ struct ContentView: View {
                 }
             }
 
-            BottomBar(model: model)
+            BottomBar(model: model) { confirming = true }
         }
         .frame(minWidth: 960, minHeight: 640)
         .fileImporter(
@@ -43,6 +45,20 @@ struct ContentView: View {
                 model.choose(url)
             }
         }
+        .confirmationDialog("Apply renames?", isPresented: $confirming, titleVisibility: .visible) {
+            Button("Apply Renames") {
+                model.apply()
+                showResult = true
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text(applyPrompt)
+        }
+        .alert("Apply complete", isPresented: $showResult) {
+            Button("OK") { }
+        } message: {
+            Text(model.lastResultSummary ?? "Nothing to do.")
+        }
     }
 
     private var subtitle: String {
@@ -51,6 +67,14 @@ struct ContentView: View {
         }
         let n = plan.nodes.filter { $0.status == .rename }.count
         return "\(url.path) · \(n) items"
+    }
+
+    private var applyPrompt: String {
+        guard let plan = model.plan else { return "" }
+        let moves = plan.nodes.filter { $0.status == .rename }
+            .reduce(0) { $0 + $1.previewPairs.count }
+        return "Move \(moves) files and send \(model.junkToTrash.count) junk to the Trash. "
+            + "Renaming never overwrites; conflicted items are skipped."
     }
 }
 
@@ -86,30 +110,34 @@ struct SummaryChips: View {
 
 struct BottomBar: View {
     let model: AppModel
+    let onApply: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
-            Button { } label: {
+            Button(action: onApply) {
                 Label("Apply renames", systemImage: "checkmark.circle.fill")
             }
             .buttonStyle(.borderedProminent)
-            .disabled(true)   // wired up in a later step
+            .disabled(!hasWork)
 
             Text(statusNote).font(.callout).foregroundStyle(.secondary)
             Spacer()
-            Text("Read-only preview").font(.caption).foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .background(.regularMaterial)
     }
 
+    private var hasWork: Bool {
+        model.plan?.nodes.contains { $0.status == .rename } ?? false
+    }
+
     private var statusNote: String {
         guard let plan = model.plan else { return "Choose a folder to begin." }
-        let moves = plan.nodes
-            .filter { $0.status == .rename }
+        let moves = plan.nodes.filter { $0.status == .rename }
             .reduce(0) { $0 + $1.previewPairs.count }
-        let junk = plan.nodes.reduce(0) { $0 + $1.junk.count }
+        let junk = model.junkToTrash.count
+        if moves == 0 && junk == 0 { return "Nothing to apply." }
         return "\(moves) files will move · \(junk) junk to Trash"
     }
 }
