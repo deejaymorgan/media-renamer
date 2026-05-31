@@ -24,7 +24,15 @@ final class AppModel {
     /// All-caps words found in the current folder (acronym candidates).
     private(set) var acronymWords: [String] = []
     /// User overrides per word; words without an override use the default rule.
+    /// Persisted across launches, so a word keeps its decision between folders.
     private(set) var acronymModes: [String: AcronymMode] = [:]
+
+    init() {
+        if let data = UserDefaults.standard.data(forKey: Self.acronymDefaultsKey),
+           let raw = try? JSONDecoder().decode([String: String].self, from: data) {
+            acronymModes = raw.compactMapValues(AcronymMode.init(rawValue:))
+        }
+    }
 
     func choose(_ url: URL) {
         folderURL = url
@@ -38,9 +46,10 @@ final class AppModel {
         acronymModes[word] ?? (word.count <= 4 ? .keep : .title)
     }
 
-    /// Change a word's decision and re-plan the whole folder live.
+    /// Change a word's decision, remember it, and re-plan the whole folder live.
     func setMode(_ mode: AcronymMode, for word: String) {
         acronymModes[word] = mode
+        persistAcronymModes()
         rebuildPlan()
     }
 
@@ -69,6 +78,17 @@ final class AppModel {
               node.editTitle != title || node.editYear != year
         else { return }
         self.plan = PlanBuilder.replan(plan, itemSource: itemSource, title: title, year: year)
+    }
+
+    // MARK: Persistence
+
+    private static let acronymDefaultsKey = "acronymModes"
+
+    private func persistAcronymModes() {
+        let raw = acronymModes.mapValues(\.rawValue)
+        if let data = try? JSONEncoder().encode(raw) {
+            UserDefaults.standard.set(data, forKey: Self.acronymDefaultsKey)
+        }
     }
 }
 
