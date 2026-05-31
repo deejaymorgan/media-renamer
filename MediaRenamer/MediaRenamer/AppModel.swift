@@ -2,30 +2,68 @@ import Foundation
 import Observation
 import RenamerCore
 
-/// The app's single source of truth. `@Observable` means SwiftUI views that read
-/// its properties re-render automatically when they change. `@MainActor` keeps
-/// all access on the main thread (it's UI state).
+/// What the sidebar has selected: "All items" mode, or one specific item.
+enum Selection: Hashable {
+    case all
+    case item(URL)
+}
+
 @MainActor
 @Observable
 final class AppModel {
-    /// The folder the user picked, if any.
     private(set) var folderURL: URL?
-    /// The computed rename plan for that folder.
     private(set) var plan: Plan?
+    var selection: Selection?
 
-    /// Pick a folder and (re)build its plan.
     func choose(_ url: URL) {
         folderURL = url
-        rebuild()
+        let p = PlanBuilder.plan(root: url)
+        plan = p
+        // Default to the first editable item; fall back to All mode.
+        if let first = p.nodes.first(where: { $0.status == .rename }) {
+            selection = .item(first.source)
+        } else {
+            selection = .all
+        }
+    }
+}
+
+/// The plan's nodes split into display buckets (same grouping the CLI uses).
+struct PlanGroups {
+    let tvRename: [NodePlan]
+    let movieRename: [NodePlan]
+    let unchanged: [NodePlan]
+    let skipped: [NodePlan]
+    let verify: [NodePlan]
+    let junkCount: Int
+
+    init(_ plan: Plan) {
+        tvRename = plan.nodes.filter { $0.mediaType == .tv && $0.status == .rename }
+        movieRename = plan.nodes.filter { $0.mediaType == .movie && $0.status == .rename }
+        unchanged = plan.nodes.filter { $0.status == .unchanged }
+        skipped = plan.nodes.filter { $0.status == .skip }
+        verify = plan.nodes.filter { !$0.verifyTitle.isEmpty }
+        junkCount = plan.nodes.reduce(0) { $0 + $1.junk.count }
+    }
+}
+
+extension NodePlan {
+    /// The original folder/file name, for display.
+    var originalName: String { source.lastPathComponent }
+
+    /// The destination directory (filename dropped) — the item's friendly name
+    /// in the list/inspector, e.g. "Breaking Bad/Season 1".
+    var destinationDirectory: String {
+        guard let first = previewPairs.first else { return originalName }
+        let parts = first.new.split(separator: "/")
+        return parts.count > 1 ? parts.dropLast().joined(separator: "/") : first.new
     }
 
-    /// Recompute the plan for the current folder.
-    ///
-    /// Synchronous for now — the engine is fast for typical folders. If a huge
-    /// library ever makes this feel laggy, we'll move it onto a background task
-    /// (the engine is already `Sendable`-clean for that).
-    func rebuild() {
-        guard let folderURL else { return }
-        plan = PlanBuilder.plan(root: folderURL)
+    /// Whether any of this node's moves collide with another's destination.
+    func isConflicted(in conflicts: Set<URL>) -> Bool {
+        operations.contains { op in
+            if case let .move(from, _) = op { return conflicts.contains(from) }
+            return false
+        }
     }
 }
