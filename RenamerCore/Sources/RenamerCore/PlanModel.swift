@@ -39,14 +39,19 @@ public struct RenameUnit: Equatable, Sendable {
     public let season: Int?            // TV
     public let languageSuffix: String  // sidecar language (".eng"), else ""
     public let ext: String             // ".mkv", ".srt", …
+    /// Version label appended as " - <suffix>" before the language/extension to
+    /// resolve a duplicate target (e.g. "2160p Remux"). Empty in the normal case.
+    public var disambiguationSuffix: String
 
     public init(source: URL, episodeCode: String?, season: Int?,
-                languageSuffix: String, ext: String) {
+                languageSuffix: String, ext: String,
+                disambiguationSuffix: String = "") {
         self.source = source
         self.episodeCode = episodeCode
         self.season = season
         self.languageSuffix = languageSuffix
         self.ext = ext
+        self.disambiguationSuffix = disambiguationSuffix
     }
 }
 
@@ -118,5 +123,38 @@ public struct Plan: Sendable {
         self.root = root
         self.nodes = nodes
         self.conflicts = conflicts
+    }
+}
+
+public extension Plan {
+    /// Sources that would move to the same destination, grouped by that shared
+    /// target (only groups of two or more). Each group is sorted by path so the
+    /// order is stable for display and tests.
+    var conflictGroups: [[URL]] {
+        var byDestination: [String: [URL]] = [:]
+        for node in nodes {
+            for case let .move(from, to) in node.operations {
+                byDestination[to.standardizedFileURL.path, default: []].append(from)
+            }
+        }
+        return byDestination.values
+            .filter { $0.count > 1 }
+            .map { $0.sorted { $0.path < $1.path } }
+            .sorted { ($0.first?.path ?? "") < ($1.first?.path ?? "") }
+    }
+
+    /// The conflict group that `source` belongs to, or nil if it is unconflicted.
+    func conflictGroup(containing source: URL) -> [URL]? {
+        conflictGroups.first { $0.contains(source) }
+    }
+}
+
+public extension NodePlan {
+    /// This node's move sources that are currently caught in a conflict.
+    func conflictedSources(in conflicts: Set<URL>) -> [URL] {
+        operations.compactMap {
+            if case let .move(from, _) = $0, conflicts.contains(from) { return from }
+            return nil
+        }
     }
 }

@@ -44,19 +44,16 @@ public enum PlanBuilder {
 
     // MARK: - Re-plan (apply a title/year edit)
 
-    /// Recompute a node's destinations from an edited title/year. Season and
-    /// episode codes stay fixed per file; only the title (and, for movies, the
-    /// year) change. Non-move operations (empty-source cleanup) are preserved.
-    public static func replan(_ node: NodePlan, title: String, year: String, root: URL) -> NodePlan {
-        guard node.status != .skip, !node.units.isEmpty else { return node }
+    /// Rebuild a node's preview pairs and move operations from its current
+    /// `units` (each carrying its own episode code, season, language, and
+    /// disambiguation suffix) and the node's current `editTitle`/`editYear`.
+    /// Non-move operations (empty-source cleanup) are preserved, in order.
+    private static func recompute(_ node: NodePlan, root: URL) -> NodePlan {
         var updated = node
-        updated.editTitle = title
-        updated.editYear = year
-
         var pairs: [PreviewPair] = []
         var ops: [Operation] = []
         for unit in node.units {
-            let dst = computeDestination(unit, title: title, year: year, root: root)
+            let dst = computeDestination(unit, title: node.editTitle, year: node.editYear, root: root)
             pairs.append(PreviewPair(old: relativePath(unit.source, from: root),
                                      new: relativePath(dst, from: root)))
             if unit.source.path != dst.path { ops.append(.move(from: unit.source, to: dst)) }
@@ -69,11 +66,42 @@ public enum PlanBuilder {
         return updated
     }
 
+    /// Recompute a node's destinations from an edited title/year. Season and
+    /// episode codes stay fixed per file; only the title (and, for movies, the
+    /// year) change. Non-move operations (empty-source cleanup) are preserved.
+    public static func replan(_ node: NodePlan, title: String, year: String, root: URL) -> NodePlan {
+        guard node.status != .skip, !node.units.isEmpty else { return node }
+        var updated = node
+        updated.editTitle = title
+        updated.editYear = year
+        return recompute(updated, root: root)
+    }
+
     /// Apply a title/year edit to one item in a plan and re-detect conflicts.
     public static func replan(_ plan: Plan, itemSource: URL, title: String, year: String) -> Plan {
         var nodes = plan.nodes
         if let i = nodes.firstIndex(where: { $0.source == itemSource }) {
             nodes[i] = replan(nodes[i], title: title, year: year, root: plan.root)
+        }
+        return Plan(root: plan.root, nodes: nodes, conflicts: ConflictChecker.detect(in: nodes))
+    }
+
+    /// Apply per-file version labels (keyed by a unit's source URL) to resolve
+    /// duplicate targets, then re-detect conflicts. A label of "" clears any
+    /// existing suffix, restoring the original destination (and the conflict).
+    /// Title/year edits already in the plan are preserved.
+    public static func resolve(_ plan: Plan, suffixes: [URL: String]) -> Plan {
+        guard !suffixes.isEmpty else { return plan }
+        var nodes = plan.nodes
+        for i in nodes.indices where nodes[i].status != .skip && !nodes[i].units.isEmpty {
+            var touched = false
+            for j in nodes[i].units.indices {
+                if let label = suffixes[nodes[i].units[j].source] {
+                    nodes[i].units[j].disambiguationSuffix = label
+                    touched = true
+                }
+            }
+            if touched { nodes[i] = recompute(nodes[i], root: plan.root) }
         }
         return Plan(root: plan.root, nodes: nodes, conflicts: ConflictChecker.detect(in: nodes))
     }
@@ -220,17 +248,26 @@ public enum PlanBuilder {
     // MARK: - Helpers
 
     /// The destination URL for one output file given a title/year.
-    /// TV: `root/title/Season N/title CODE[.lang].ext`.
-    /// Movie: `root/title (year)/title (year)[.lang].ext`.
+    /// TV: `root/title/Season N/title CODE[ - tag][.lang].ext`.
+    /// Movie: `root/title (year)/title (year)[ - tag][.lang].ext`.
+    ///
+    /// A non-empty `disambiguationSuffix` is rendered as ` - <tag>` on the
+    /// filename only — the containing folder is unchanged, so multiple versions
+    /// share one `Title (Year)/` folder (Plex/Jellyfin treat them as versions).
     static func computeDestination(_ unit: RenameUnit, title: String, year: String, root: URL) -> URL {
+        let tag = unit.disambiguationSuffix
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+            .trimmingCharacters(in: .whitespaces)
+        let suffix = tag.isEmpty ? "" : " - \(tag)"
         if let code = unit.episodeCode, let season = unit.season {
             return root.appendingPathComponent(title)
                 .appendingPathComponent("Season \(season)")
-                .appendingPathComponent("\(title) \(code)\(unit.languageSuffix)\(unit.ext)")
+                .appendingPathComponent("\(title) \(code)\(suffix)\(unit.languageSuffix)\(unit.ext)")
         } else {
             let full = "\(title) (\(year))"
             return root.appendingPathComponent(full)
-                .appendingPathComponent("\(full)\(unit.languageSuffix)\(unit.ext)")
+                .appendingPathComponent("\(full)\(suffix)\(unit.languageSuffix)\(unit.ext)")
         }
     }
 
