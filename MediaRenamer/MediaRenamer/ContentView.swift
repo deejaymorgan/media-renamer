@@ -8,6 +8,10 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if !model.acronymWords.isEmpty {
+                AcronymBar(model: model)
+                Divider()
+            }
             NavigationSplitView {
                 SidebarView(model: model)
                     .navigationSplitViewColumnWidth(min: 250, ideal: 300)
