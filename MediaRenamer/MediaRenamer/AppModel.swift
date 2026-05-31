@@ -28,6 +28,9 @@ final class AppModel {
 
     /// Junk the user chose to KEEP (unchecked). Everything else is trashed.
     private(set) var keptJunk: Set<URL> = []
+    /// Per-source version labels chosen in the resolve panel, keyed by the unit's
+    /// source URL. Re-applied after every rebuild so resolutions survive edits.
+    private(set) var disambiguation: [URL: String] = [:]
     /// Outcome of the most recent Apply.
     private(set) var lastResult: ApplyResult?
 
@@ -41,6 +44,7 @@ final class AppModel {
     func choose(_ url: URL) {
         folderURL = url
         keptJunk = []
+        disambiguation = [:]
         acronymWords = PlanBuilder.allCapsWords(root: url)
         selection = nil
         rebuildPlan()
@@ -66,7 +70,8 @@ final class AppModel {
 
     private func rebuildPlan() {
         guard let folderURL else { return }
-        let p = PlanBuilder.plan(root: folderURL, acronyms: acronymMap)
+        var p = PlanBuilder.plan(root: folderURL, acronyms: acronymMap)
+        if !disambiguation.isEmpty { p = PlanBuilder.resolve(p, suffixes: disambiguation) }
         plan = p
         if selection == nil {
             selection = p.nodes.first(where: { $0.status == .rename }).map { .item($0.source) } ?? .all
@@ -82,6 +87,27 @@ final class AppModel {
               node.editTitle != title || node.editYear != year
         else { return }
         self.plan = PlanBuilder.replan(plan, itemSource: itemSource, title: title, year: year)
+    }
+
+    // MARK: Duplicate resolution
+
+    /// Assign version labels (keyed by source URL) to a conflict group and
+    /// re-detect conflicts. Distinct labels clear the collision.
+    func resolve(_ labels: [URL: String]) {
+        for (src, label) in labels { disambiguation[src] = label }
+        applyDisambiguation()
+    }
+
+    /// Leave a conflict unresolved: clear any labels so the sources keep their
+    /// shared target (and stay skipped at apply).
+    func skipConflict(_ sources: [URL]) {
+        for src in sources { disambiguation[src] = "" }
+        applyDisambiguation()
+    }
+
+    private func applyDisambiguation() {
+        guard let plan else { return }
+        self.plan = PlanBuilder.resolve(plan, suffixes: disambiguation)
     }
 
     // MARK: Junk
@@ -162,5 +188,23 @@ extension NodePlan {
             if case let .move(from, _) = op { return conflicts.contains(from) }
             return false
         }
+    }
+
+    /// The distinct conflict groups this node takes part in, each paired with
+    /// the shared destination filename the group is fighting over. Usually one.
+    func displayConflicts(in plan: Plan) -> [(group: [URL], target: String)] {
+        var seen = Set<String>()
+        var out: [(group: [URL], target: String)] = []
+        for src in conflictedSources(in: plan.conflicts) {
+            guard let group = plan.conflictGroup(containing: src) else { continue }
+            let key = group.map(\.path).joined(separator: "|")
+            guard seen.insert(key).inserted else { continue }
+            let target = operations.compactMap { op -> String? in
+                if case let .move(from, to) = op, from == src { return to.lastPathComponent }
+                return nil
+            }.first ?? ""
+            out.append((group, target))
+        }
+        return out
     }
 }
