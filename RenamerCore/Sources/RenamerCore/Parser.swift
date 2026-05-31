@@ -99,4 +99,39 @@ public enum MediaParser {
         let finalTitle = normalised.isEmpty ? "Unknown" : normalised
         return MediaParse(title: "\(finalTitle) (\(year))", preservedStopwords: preserved)
     }
+
+    /// The portion of a filename before its episode code (TV) or year (movie),
+    /// used to scan for all-caps words. nil if neither is present.
+    static func titlePortion(_ filename: String) -> String? {
+        let name = Str.splitext(filename).root
+        if let m = Patterns.episode.firstMatch(name), let r = Range(m.range, in: name) {
+            return String(name[..<r.lowerBound])
+        }
+        if let span = releaseYear(name) {
+            return String(name[..<span.lowerBound])
+        }
+        return nil
+    }
+
+    /// Unique all-caps words (≥2 letters) across the title portions of these
+    /// filenames — the candidates for acronym keep/Title decisions. Movie titles
+    /// drop the discarded left-of-AKA part. Ported from `collect_all_caps_words`.
+    public static func collectAllCapsWords(_ filenames: [String]) -> [String] {
+        var words = Set<String>()
+        for filename in filenames {
+            guard let raw = titlePortion(filename) else { continue }
+            var title = raw.replacingOccurrences(of: ".", with: " ")
+            if classify(filename) == .movie,
+               let aka = Patterns.aka.firstMatch(title),
+               let r = Range(aka.range, in: title) {
+                title = String(title[r.upperBound...])
+            }
+            for m in Patterns.word.allMatches(title) {
+                guard let r = Range(m.range, in: title) else { continue }
+                let w = String(title[r])
+                if w.count >= 2 && w == w.uppercased() { words.insert(w) }
+            }
+        }
+        return words.sorted()
+    }
 }
