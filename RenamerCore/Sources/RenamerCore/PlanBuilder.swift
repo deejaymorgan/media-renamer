@@ -27,6 +27,42 @@ public enum PlanBuilder {
         return plans
     }
 
+    // MARK: - Re-plan (apply a title/year edit)
+
+    /// Recompute a node's destinations from an edited title/year. Season and
+    /// episode codes stay fixed per file; only the title (and, for movies, the
+    /// year) change. Non-move operations (empty-source cleanup) are preserved.
+    public static func replan(_ node: NodePlan, title: String, year: String, root: URL) -> NodePlan {
+        guard node.status != .skip, !node.units.isEmpty else { return node }
+        var updated = node
+        updated.editTitle = title
+        updated.editYear = year
+
+        var pairs: [PreviewPair] = []
+        var ops: [Operation] = []
+        for unit in node.units {
+            let dst = computeDestination(unit, title: title, year: year, root: root)
+            pairs.append(PreviewPair(old: relativePath(unit.source, from: root),
+                                     new: relativePath(dst, from: root)))
+            if unit.source.path != dst.path { ops.append(.move(from: unit.source, to: dst)) }
+        }
+        for op in node.operations where !op.isMove { ops.append(op) }
+
+        updated.previewPairs = pairs
+        updated.operations = ops
+        updated.status = ops.contains(where: \.isMove) ? .rename : .unchanged
+        return updated
+    }
+
+    /// Apply a title/year edit to one item in a plan and re-detect conflicts.
+    public static func replan(_ plan: Plan, itemSource: URL, title: String, year: String) -> Plan {
+        var nodes = plan.nodes
+        if let i = nodes.firstIndex(where: { $0.source == itemSource }) {
+            nodes[i] = replan(nodes[i], title: title, year: year, root: plan.root)
+        }
+        return Plan(root: plan.root, nodes: nodes, conflicts: ConflictChecker.detect(in: nodes))
+    }
+
     // MARK: - Loose files
 
     private static func planFile(_ entry: URL, root: URL, acronyms: [String: String]) -> NodePlan {
@@ -46,28 +82,26 @@ public enum PlanBuilder {
 
     private static func planLoose(_ path: URL, root: URL, parse: MediaParse) -> NodePlan {
         let isTV = parse.episodeCode != nil
-        let dst: URL
-        if isTV, let code = parse.episodeCode, let season = parse.season {
-            dst = root.appendingPathComponent(parse.title)
-                .appendingPathComponent("Season \(season)")
-                .appendingPathComponent("\(parse.title) \(code).mkv")
-        } else {
-            dst = root.appendingPathComponent(parse.title)
-                .appendingPathComponent("\(parse.title).mkv")
-        }
+        let (title, year) = isTV ? (parse.title, "") : splitMovieTitle(parse.title)
+        let unit = RenameUnit(
+            source: path, episodeCode: parse.episodeCode, season: parse.season,
+            languageSuffix: "", ext: Str.splitext(path.lastPathComponent).ext)
 
-        var plan = NodePlan(source: path, mediaType: isTV ? .tv : .movie, status: .rename)
+        var plan = NodePlan(source: path, mediaType: isTV ? .tv : .movie, status: .rename,
+                            editTitle: title, editYear: year, units: [unit])
         if !parse.preservedStopwords.isEmpty {
             plan.verifyTitle = parse.title
             plan.verifyWords = parse.preservedStopwords
         }
+
+        let dst = computeDestination(unit, title: title, year: year, root: root)
         plan.previewPairs = [PreviewPair(old: relativePath(path, from: root),
                                          new: relativePath(dst, from: root))]
         if path.path == dst.path {
             plan.status = .unchanged
-            return plan
+        } else {
+            plan.operations.append(.move(from: path, to: dst))
         }
-        plan.operations.append(.move(from: path, to: dst))
         return plan
     }
 
@@ -110,8 +144,6 @@ public enum PlanBuilder {
     private static func planFolder(_ folder: URL, parses: [(URL, MediaParse)],
                                    sidecars: [URL], junk: [URL], root: URL) -> NodePlan {
         let isTV = parses[0].1.episodeCode != nil
-        var plan = NodePlan(source: folder, mediaType: isTV ? .tv : .movie,
-                            status: .rename, junk: junk)
 
         // Most common title, ties broken by first appearance (mirrors Counter).
         var counts: [String: Int] = [:]
@@ -126,6 +158,26 @@ public enum PlanBuilder {
             title = t
             bestCount = counts[t]!
         }
+        let (editTitle, editYear) = isTV ? (title, "") : splitMovieTitle(title)
+
+        // One unit per output file: the video, then each of its sidecars.
+        let sidecarMap = Sidecars.group(videos: parses.map { $0.0 }, sidecars: sidecars)
+        var units: [RenameUnit] = []
+        for (video, p) in parses {
+            units.append(RenameUnit(
+                source: video, episodeCode: p.episodeCode, season: p.season,
+                languageSuffix: "", ext: Str.splitext(video.lastPathComponent).ext))
+            for s in sidecarMap[video] ?? [] {
+                units.append(RenameUnit(
+                    source: s, episodeCode: p.episodeCode, season: p.season,
+                    languageSuffix: Sidecars.languageSuffix(s.lastPathComponent),
+                    ext: Str.splitext(s.lastPathComponent).ext))
+            }
+        }
+
+        var plan = NodePlan(source: folder, mediaType: isTV ? .tv : .movie,
+                            status: .rename, junk: junk,
+                            editTitle: editTitle, editYear: editYear, units: units)
 
         let allPreserved = Set(parses.flatMap { $0.1.preservedStopwords }).sorted()
         if !allPreserved.isEmpty {
@@ -133,47 +185,49 @@ public enum PlanBuilder {
             plan.verifyWords = allPreserved
         }
 
-        let mediaDir = root.appendingPathComponent(title)
-        let sidecarMap = Sidecars.group(videos: parses.map { $0.0 }, sidecars: sidecars)
-
-        for (video, p) in parses {
-            let destDir: URL
-            let targetStem: String
-            if let code = p.episodeCode, let season = p.season {
-                destDir = mediaDir.appendingPathComponent("Season \(season)")
-                targetStem = "\(title) \(code)"
-            } else {
-                destDir = mediaDir
-                targetStem = title
-            }
-
-            let dst = destDir.appendingPathComponent("\(targetStem).mkv")
-            if video.path != dst.path { plan.operations.append(.move(from: video, to: dst)) }
-            plan.previewPairs.append(PreviewPair(old: relativePath(video, from: root),
+        for unit in units {
+            let dst = computeDestination(unit, title: editTitle, year: editYear, root: root)
+            if unit.source.path != dst.path { plan.operations.append(.move(from: unit.source, to: dst)) }
+            plan.previewPairs.append(PreviewPair(old: relativePath(unit.source, from: root),
                                                  new: relativePath(dst, from: root)))
-
-            for s in sidecarMap[video] ?? [] {
-                let sName = Sidecars.newName(targetStem: targetStem, source: s.lastPathComponent)
-                let sDst = destDir.appendingPathComponent(sName)
-                if s.path != sDst.path { plan.operations.append(.move(from: s, to: sDst)) }
-                plan.previewPairs.append(PreviewPair(old: relativePath(s, from: root),
-                                                     new: relativePath(sDst, from: root)))
-            }
         }
 
         // Remove the now-empty source folder (unless it *is* the destination).
+        let mediaDir = root.appendingPathComponent(title)
         if folder.standardizedFileURL.path != mediaDir.standardizedFileURL.path {
             plan.operations.append(.removeEmptyDirectory(folder))
         }
 
-        let hasMove = plan.operations.contains {
-            if case .move = $0 { return true } else { return false }
-        }
-        if !hasMove { plan.status = .unchanged }
+        if !plan.operations.contains(where: \.isMove) { plan.status = .unchanged }
         return plan
     }
 
     // MARK: - Helpers
+
+    /// The destination URL for one output file given a title/year.
+    /// TV: `root/title/Season N/title CODE[.lang].ext`.
+    /// Movie: `root/title (year)/title (year)[.lang].ext`.
+    static func computeDestination(_ unit: RenameUnit, title: String, year: String, root: URL) -> URL {
+        if let code = unit.episodeCode, let season = unit.season {
+            return root.appendingPathComponent(title)
+                .appendingPathComponent("Season \(season)")
+                .appendingPathComponent("\(title) \(code)\(unit.languageSuffix)\(unit.ext)")
+        } else {
+            let full = "\(title) (\(year))"
+            return root.appendingPathComponent(full)
+                .appendingPathComponent("\(full)\(unit.languageSuffix)\(unit.ext)")
+        }
+    }
+
+    /// Split a movie title `"Name (YYYY)"` into its name and year parts.
+    static func splitMovieTitle(_ title: String) -> (name: String, year: String) {
+        guard title.hasSuffix(")"), let open = title.lastIndex(of: "(") else {
+            return (title, "")
+        }
+        let year = String(title[title.index(after: open)..<title.index(before: title.endIndex)])
+        let name = String(title[..<open]).trimmingCharacters(in: .whitespaces)
+        return (name, year)
+    }
 
     /// Path of `url` relative to `root` (both assumed in-tree). Mirrors
     /// `os.path.relpath` for the under-root case.
