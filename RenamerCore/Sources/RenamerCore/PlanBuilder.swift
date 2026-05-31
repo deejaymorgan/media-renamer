@@ -27,6 +27,21 @@ public enum PlanBuilder {
         return plans
     }
 
+    /// Unique all-caps words across the folder's video filenames — the
+    /// candidates for acronym keep/Title decisions.
+    public static func allCapsWords(root: URL) -> [String] {
+        var names: [String] = []
+        for entry in Scanner.listDir(root) {
+            if Scanner.isDirectory(entry) {
+                if Constants.ignoredFolderNames.contains(entry.lastPathComponent.lowercased()) { continue }
+                names += Scanner.scanContents(entry).videos.map { $0.lastPathComponent }
+            } else if Constants.videoExtensions.contains(Str.splitext(entry.lastPathComponent).ext.lowercased()) {
+                names.append(entry.lastPathComponent)
+            }
+        }
+        return MediaParser.collectAllCapsWords(names)
+    }
+
     // MARK: - Re-plan (apply a title/year edit)
 
     /// Recompute a node's destinations from an edited title/year. Season and

@@ -8,6 +8,12 @@ enum Selection: Hashable {
     case item(URL)
 }
 
+/// How an all-caps word is rendered everywhere it appears.
+enum AcronymMode: String {
+    case keep   // "WALL" stays "WALL"
+    case title  // "WALL" → "Wall"
+}
+
 @MainActor
 @Observable
 final class AppModel {
@@ -15,20 +21,48 @@ final class AppModel {
     private(set) var plan: Plan?
     var selection: Selection?
 
+    /// All-caps words found in the current folder (acronym candidates).
+    private(set) var acronymWords: [String] = []
+    /// User overrides per word; words without an override use the default rule.
+    private(set) var acronymModes: [String: AcronymMode] = [:]
+
     func choose(_ url: URL) {
         folderURL = url
-        let p = PlanBuilder.plan(root: url)
+        acronymWords = PlanBuilder.allCapsWords(root: url)
+        selection = nil
+        rebuildPlan()
+    }
+
+    /// The decision for a word: a user override, else the default (keep ≤4 chars).
+    func mode(for word: String) -> AcronymMode {
+        acronymModes[word] ?? (word.count <= 4 ? .keep : .title)
+    }
+
+    /// Change a word's decision and re-plan the whole folder live.
+    func setMode(_ mode: AcronymMode, for word: String) {
+        acronymModes[word] = mode
+        rebuildPlan()
+    }
+
+    /// Engine acronym map — only "keep" words need an entry (title mode is the
+    /// engine's default for unknown all-caps words).
+    private var acronymMap: [String: String] {
+        var map: [String: String] = [:]
+        for word in acronymWords where mode(for: word) == .keep { map[word] = word }
+        return map
+    }
+
+    private func rebuildPlan() {
+        guard let folderURL else { return }
+        let p = PlanBuilder.plan(root: folderURL, acronyms: acronymMap)
         plan = p
-        // Default to the first editable item; fall back to All mode.
-        if let first = p.nodes.first(where: { $0.status == .rename }) {
-            selection = .item(first.source)
-        } else {
-            selection = .all
+        if selection == nil {
+            selection = p.nodes.first(where: { $0.status == .rename }).map { .item($0.source) } ?? .all
         }
     }
 
     /// Apply a title/year edit to one item and re-detect conflicts. No-ops if
-    /// nothing actually changed (keeps live editing cheap and flicker-free).
+    /// nothing changed (keeps live editing cheap and flicker-free).
     func replan(itemSource: URL, title: String, year: String) {
         guard let plan,
               let node = plan.nodes.first(where: { $0.source == itemSource }),
