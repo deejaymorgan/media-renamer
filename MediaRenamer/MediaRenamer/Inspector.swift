@@ -8,10 +8,10 @@ struct DetailView: View {
         if let plan = model.plan {
             switch model.selection {
             case .all?:
-                AllModeView(plan: plan)
+                AllModeView(plan: plan, model: model)
             case .item(let url)?:
                 if let node = plan.nodes.first(where: { $0.source == url }) {
-                    InspectorView(node: node, conflicts: plan.conflicts)
+                    InspectorView(node: node, conflicts: plan.conflicts, model: model)
                 } else {
                     EmptyDetail()
                 }
@@ -24,11 +24,49 @@ struct DetailView: View {
     }
 }
 
-// MARK: - Single-item inspector (read-only for now)
+// MARK: - Editable Title / Year
+
+/// Title (and, for movies, Year) fields that re-plan the item live on each edit.
+/// Local @State backs the fields; `.id(node.source)` gives each item fresh state.
+struct EditFields: View {
+    let node: NodePlan
+    let model: AppModel
+    @State private var title = ""
+    @State private var year = ""
+
+    var body: some View {
+        HStack(alignment: .bottom, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(node.mediaType == .tv ? "Show title" : "Movie title")
+                    .font(.caption).foregroundStyle(.secondary)
+                TextField("Title", text: $title)
+                    .textFieldStyle(.roundedBorder)
+            }
+            if node.mediaType == .movie {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Year").font(.caption).foregroundStyle(.secondary)
+                    TextField("Year", text: $year)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 72)
+                }
+            }
+        }
+        .onAppear { title = node.editTitle; year = node.editYear }
+        .onChange(of: title) { _, new in
+            model.replan(itemSource: node.source, title: new, year: year)
+        }
+        .onChange(of: year) { _, new in
+            model.replan(itemSource: node.source, title: title, year: new)
+        }
+    }
+}
+
+// MARK: - Single-item inspector
 
 struct InspectorView: View {
     let node: NodePlan
     let conflicts: Set<URL>
+    let model: AppModel
 
     var body: some View {
         ScrollView {
@@ -43,6 +81,15 @@ struct InspectorView: View {
                     .font(.callout).foregroundStyle(.secondary)
                     .textSelection(.enabled)
 
+                VStack(alignment: .leading, spacing: 6) {
+                    EditFields(node: node, model: model).id(node.source)
+                    Text("Title Case · hyphens preserved")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+
                 if node.isConflicted(in: conflicts) {
                     ConflictNote(node: node)
                 } else {
@@ -56,10 +103,11 @@ struct InspectorView: View {
     }
 }
 
-// MARK: - All mode (read-only collapsible cards)
+// MARK: - All mode (collapsible cards, each editable)
 
 struct AllModeView: View {
     let plan: Plan
+    let model: AppModel
     @State private var expanded: Set<URL> = []
 
     private var items: [NodePlan] {
@@ -79,7 +127,8 @@ struct AllModeView: View {
                     AllCard(
                         node: node,
                         conflicts: plan.conflicts,
-                        isExpanded: expanded.contains(node.source)
+                        isExpanded: expanded.contains(node.source),
+                        model: model
                     ) { toggle(node.source) }
                 }
             }
@@ -97,6 +146,7 @@ struct AllCard: View {
     let node: NodePlan
     let conflicts: Set<URL>
     let isExpanded: Bool
+    let model: AppModel
     let toggle: () -> Void
 
     var body: some View {
@@ -116,6 +166,9 @@ struct AllCard: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+
+            // Always-editable fields (don't toggle the card).
+            EditFields(node: node, model: model).id(node.source)
 
             if isExpanded {
                 if node.isConflicted(in: conflicts) {
@@ -179,7 +232,7 @@ struct ConflictNote: View {
         VStack(alignment: .leading, spacing: 6) {
             Label("Duplicate target", systemImage: "exclamationmark.triangle.fill")
                 .font(.headline).foregroundStyle(.red)
-            Text("Shares a destination with another file — both are skipped until disambiguated. (Resolution UI comes in a later step.)")
+            Text("Shares a destination with another file — both are skipped until disambiguated. Editing a title above can resolve it; the full resolve panel comes in a later step.")
                 .font(.callout).foregroundStyle(.secondary)
             ResultingFiles(node: node)
         }

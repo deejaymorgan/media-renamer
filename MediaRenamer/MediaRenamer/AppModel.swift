@@ -26,6 +26,16 @@ final class AppModel {
             selection = .all
         }
     }
+
+    /// Apply a title/year edit to one item and re-detect conflicts. No-ops if
+    /// nothing actually changed (keeps live editing cheap and flicker-free).
+    func replan(itemSource: URL, title: String, year: String) {
+        guard let plan,
+              let node = plan.nodes.first(where: { $0.source == itemSource }),
+              node.editTitle != title || node.editYear != year
+        else { return }
+        self.plan = PlanBuilder.replan(plan, itemSource: itemSource, title: title, year: year)
+    }
 }
 
 /// The plan's nodes split into display buckets (same grouping the CLI uses).
