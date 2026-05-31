@@ -94,7 +94,7 @@ struct InspectorView: View {
                     ConflictNote(node: node)
                 } else {
                     ResultingFiles(node: node)
-                    if !node.junk.isEmpty { JunkList(node: node) }
+                    if !node.junk.isEmpty { JunkList(node: node, model: model) }
                 }
             }
             .padding(20)
@@ -175,7 +175,7 @@ struct AllCard: View {
                     ConflictNote(node: node)
                 } else {
                     ResultingFiles(node: node)
-                    if !node.junk.isEmpty { JunkList(node: node) }
+                    if !node.junk.isEmpty { JunkList(node: node, model: model) }
                 }
             } else {
                 Text("→ \(node.destinationDirectory) · \(node.previewPairs.count) file(s)")
@@ -210,16 +210,22 @@ struct ResultingFiles: View {
 
 struct JunkList: View {
     let node: NodePlan
+    let model: AppModel
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Junk → Trash").font(.subheadline).foregroundStyle(.secondary)
-            ForEach(Array(node.junk.enumerated()), id: \.offset) { _, url in
-                HStack(spacing: 6) {
-                    Image(systemName: "trash").foregroundStyle(.red)
-                    Text(url.lastPathComponent)
-                        .font(.system(.callout, design: .monospaced))
-                    Spacer()
+            ForEach(node.junk, id: \.self) { url in
+                Toggle(isOn: Binding(
+                    get: { model.isJunkTrashed(url) },
+                    set: { model.setJunkTrashed(url, $0) }
+                )) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "trash").foregroundStyle(.red)
+                        Text(url.lastPathComponent)
+                            .font(.system(.callout, design: .monospaced))
+                    }
                 }
+                .toggleStyle(.checkbox)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -15,6 +15,8 @@ public struct ApplyResult: Sendable {
     public internal(set) var conflictCount = 0
     /// Operations that failed with an error.
     public internal(set) var errorCount = 0
+    /// Junk files successfully moved to the Trash.
+    public internal(set) var trashedCount = 0
     /// Completed moves, in order (for an undo step later).
     public internal(set) var completedMoves: [CompletedMove] = []
     /// Human-readable log lines for skips and errors.
@@ -35,6 +37,19 @@ public enum Executor {
 
     public static func apply(_ plan: Plan) -> ApplyResult {
         apply(nodes: plan.nodes, conflicts: plan.conflicts)
+    }
+
+    /// Trash the approved junk first (so emptied source folders can be cleaned
+    /// up), then perform the renames. Returns one combined result.
+    public static func apply(_ plan: Plan, trashing junk: [URL], using trasher: Trasher) -> ApplyResult {
+        let outcomes = trasher.trash(junk)
+        var result = apply(plan)
+        result.trashedCount = outcomes.filter { $0.error == nil }.count
+        for outcome in outcomes where outcome.error != nil {
+            result.errorCount += 1
+            result.messages.append("Trash failed: \(outcome.source.lastPathComponent)")
+        }
+        return result
     }
 
     public static func apply(nodes: [NodePlan], conflicts: Set<URL>) -> ApplyResult {
