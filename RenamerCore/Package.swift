@@ -5,8 +5,8 @@ let package = Package(
     name: "RenamerCore",
     platforms: [.macOS(.v13)],
     products: [
-        // The engine: pure logic, no UI. The SwiftUI app (added once Xcode is
-        // installed) will depend on this product via a local path.
+        // The engine: pure logic, no UI. The SwiftUI app in ../MediaRenamer
+        // depends on this product via a local package path.
         .library(name: "RenamerCore", targets: ["RenamerCore"]),
     ],
     targets: [

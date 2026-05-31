@@ -1,7 +1,8 @@
 # Media Renamer — Native macOS App Specification
 
-**Status:** Draft · **Date:** 2026-05-30 · **Behavioural baseline:** the original
-Python engine at `~/Dev/tv-show-renamer` (`renamer.py` + `data.py`)
+**Status:** MVP delivered, extending · **Updated:** 2026-05-31 · **Behavioural
+baseline:** the original Python engine at `~/Dev/tv-show-renamer` (`renamer.py` +
+`data.py`)
 
 A native macOS app that restructures a folder of `.mkv` files (and subtitle
 sidecars) into a Plex/Jellyfin-friendly tree. A ground-up rebuild of an existing
@@ -20,8 +21,8 @@ One Swift engine, one SwiftUI front-end, fully native, macOS-only.
 - **Engine (`RenamerCore`):** a pure Swift Package — parsing, classification,
   planning, conflict detection, execution. No UI, no I/O prompts. Fully unit-
   tested via `swift test` (no Xcode required to test the engine).
-- **App:** a SwiftUI macOS app that depends on `RenamerCore` and renders/drives
-  it. The engine is never re-implemented outside Swift.
+- **App (`MediaRenamer`):** a SwiftUI macOS app that depends on `RenamerCore`
+  and renders/drives it. The engine is never re-implemented outside Swift.
 - **Heritage:** the Python CLI (`~/Dev/tv-show-renamer`) defines the *rules*
   (formatting syntax, year/episode parsing, duplicate checking, sidecar/junk
   handling). Its `tests/` are the parity oracle the Swift tests mirror. No Python
@@ -39,10 +40,11 @@ change best made as a clean rebuild, in the language the UI uses.
 ## 2. Goals & Non-Goals
 
 ### Goals
-- A native macOS GUI reaching full parity with the original CLI's behaviour.
-- North-star features: **editable titles before apply**, **online title
-  verification**, **undo last run**, **remembered settings**.
-- A clean engine/UI split, with the engine pure and headlessly testable.
+- A native macOS GUI matching the original CLI's behaviour. **✅ parity reached.**
+- Editable titles before apply. **✅ delivered.**
+- Remembered settings (recent acronym choices). **✅ acronyms persisted.**
+- Remaining north-star: **online title verification**, **undo last run**.
+- A clean engine/UI split, with the engine pure and headlessly testable. **✅**
 - Shippable as a double-click `.app` (eventually).
 
 ### Non-Goals
@@ -50,7 +52,9 @@ change best made as a clean rebuild, in the language the UI uses.
   Trash, and SwiftUI.
 - Multi-user / sharing / public release. Personal tool.
 - Changing the renaming rules. Naming conventions, parsing, and output formats
-  stay as specified by the Python baseline.
+  stay as specified by the Python baseline (the duplicate *resolver* is a new
+  front-end capability layered on top — it does not change how a single file is
+  parsed or named).
 - Re-implementing logic outside Swift (no JS/Python port — the drift trap the
   predecessor fell into).
 
@@ -58,37 +62,63 @@ change best made as a clean rebuild, in the language the UI uses.
 
 ## 3. Architecture
 
-### Repo layout
+### Repo layout (actual)
 ```
 media-renamer/
-  RenamerCore/                 # the engine — pure Swift Package, no UI
-    Package.swift
+  RenamerCore/                      # the engine — pure Swift Package, no UI
+    Package.swift                   # swift-tools 6.0, .macOS(.v13), library RenamerCore
     Sources/RenamerCore/
-      Constants.swift          # ported data tables (ext, tokens, langs, …)
-      Patterns.swift           # compiled regexes + helpers
-      StringHelpers.swift      # Python-parity string ops (splitext, rstrip, …)
-      MediaParse.swift         # MediaType, MediaParse
-      TitleFormatter.swift     # titleCase / normalise / preservedStopwords
-      Parser.swift             # classify / releaseYear / tv / movie
-      Sidecars.swift           # language suffix detection + sidecar naming
-      (planned) PlanBuilder.swift, ConflictChecker.swift,
-                RenamePlan.swift (document model), Executor.swift, Trasher.swift
-    Tests/RenamerCoreTests/    # swift test — mirrors the Python oracle
-  MediaRenamer.xcodeproj       # (planned) the SwiftUI app, added with Xcode
-  MediaRenamer/                # (planned) app sources; depends on ../RenamerCore
+      Constants.swift               # ported data tables (ext, tokens, langs, junk patterns)
+      Patterns.swift                # compiled NSRegularExpressions + match helpers
+      StringHelpers.swift           # Python-parity string ops (splitext, rstrip, …)
+      MediaParse.swift              # MediaType, MediaParse
+      TitleFormatter.swift          # title-case / normalise / preservedStopwords
+      Parser.swift                  # classify / releaseYear / tv / movie
+      Sidecars.swift                # subtitle language suffix + sidecar grouping
+      Scanner.swift                 # one-level directory scan → (videos, sidecars, junk)
+      PlanModel.swift               # NodePlan, Plan, Operation, RenameUnit, PreviewPair
+      PlanBuilder.swift             # build / replan / resolve  (plan_input_dir port + edits)
+      ConflictChecker.swift         # duplicate-target detection
+      QualityTag.swift              # version-label parsing for the resolver (new — no oracle)
+      Executor.swift                # apply moves + empty-dir cleanup; ApplyResult
+      Trasher.swift                 # Trasher protocol + SystemTrasher (real macOS Trash)
+    Tests/RenamerCoreTests/         # swift test — mirrors the Python oracle (69 tests, 8 suites)
+  MediaRenamer/
+    MediaRenamer.xcodeproj          # app target; links ../RenamerCore as a local package
+    MediaRenamer/
+      MediaRenamerApp.swift         # @main App
+      AppModel.swift                # @Observable document model (choose/replan/resolve/apply)
+      ContentView.swift             # NavigationSplitView shell + toolbar + bottom apply bar
+      Sidebar.swift                 # source list (All / TV / Movies / Unchanged / Skipped) + flag badges
+      Inspector.swift               # detail: editable fields, results, junk toggles, conflict resolver
+      AcronymBar.swift              # acronym keep/Title chips
+      Assets.xcassets
   SPEC.md  README.md  .gitignore
 ```
+
+### UI shape
+A `NavigationSplitView`: a **sidebar** lists the plan grouped into All items /
+TV / Movies / Unchanged / Skipped, each row flagged for duplicate / junk /
+verify; the **detail inspector** shows the selected item (or an "All" mode of
+collapsible, individually-editable cards). The inspector edits the title (and,
+for movies, the year), lists the resulting files, offers per-file junk→Trash
+checkboxes, and — for a duplicate target — an interactive resolver. An acronym
+bar (keep vs Title-case chips) appears when all-caps words are detected; a bottom
+bar applies the plan behind a confirmation dialog.
 
 ### Principles
 - **Engine is pure & dependency-free** (Foundation only). It returns data; the
   app decides how to present it and when to touch disk. No prompts, no printing.
-- **A document model drives the UI.** Loading a folder yields a `RenamePlan` of
-  editable entries (`@Observable`); editing a title re-computes that entry's
-  destination and re-runs conflict detection.
-- **Operations are reversible.** Each move/mkdir/trash is recorded so the last
-  run can be undone.
-- **Async, off the main actor.** Scans, applies, and (later) online lookups run
-  as cancellable `async` work; the window stays responsive.
+- **A document model drives the UI.** `AppModel` (`@Observable`) holds the
+  `Plan`; editing a title/year re-computes that node's destinations and re-runs
+  conflict detection live. Acronym choices and duplicate resolutions are kept and
+  re-applied across rebuilds.
+- **Operations are recorded for undo.** `Executor` returns
+  `ApplyResult.completedMoves`; the undo *engine hook* exists, the undo *UI* is
+  not built yet (M6).
+- **Async off the main actor — a goal, not yet realised.** Apply is currently
+  synchronous (fine for typical folders); moving it off-main is a TODO for very
+  large trees.
 
 ### Native wins we take for free
 - `FileManager.trashItem(at:resultingItemURL:)` — real macOS Trash, with the
@@ -96,7 +126,7 @@ media-renamer/
 - `.fileImporter` — native folder picker.
 - Automatic light/dark appearance, real OS integration, Xcode Previews as the
   design loop.
-- Swift concurrency (`async`/`await`, actors) for background work.
+- Swift concurrency (`async`/`await`, actors) available for background work.
 
 ---
 
@@ -104,15 +134,17 @@ media-renamer/
 
 | Concern | Choice |
 |---|---|
-| Language | Swift 6 |
-| Engine | `RenamerCore` Swift Package (Foundation only) |
-| UI | SwiftUI (macOS 13+) |
+| Toolchain | Swift 6.x (Xcode) |
+| Engine | `RenamerCore` Swift Package — `swift-tools 6.0`, Foundation only |
+| App language mode | `SWIFT_VERSION = 5.0` (app target); engine uses tools 6.0 |
+| UI | SwiftUI |
+| Min OS | Engine package: macOS 13+. App deployment target: the installed SDK default (macOS 26.5) — lower it if you need to run on older macOS |
 | Tests | Swift Testing (`swift test`) — engine only, no Xcode needed |
-| Trash | `FileManager.trashItem` |
-| Settings | `UserDefaults` / `@AppStorage` |
+| Trash | `FileManager.trashItem` (via `SystemTrasher`) |
+| Settings | `UserDefaults` (acronym modes persisted) |
 | Online lookup (goal) | TMDb/TVDB REST + local cache (opt-in) |
 | Packaging (later) | Xcode → notarised `.app` |
-| Sandbox | **Off** for now (personal use); revisit only for App Store |
+| Sandbox | **Off** (`ENABLE_APP_SANDBOX = NO`) for personal use; revisit for App Store |
 
 ---
 
@@ -125,57 +157,79 @@ Verbatim behaviour from `~/Dev/tv-show-renamer`, pinned by parity tests:
   (`S2024E01` → `Season 2024`), any casing → uppercased.
 - **Year detection:** canonical `Title (YYYY)` wins; else rightmost scene-style
   `.YYYY.<known metadata token>`; else rightmost non-leading year. Avoids
-  year-in-title traps (`2001 A Space Odyssey 1968…` → 1968).
+  year-in-title traps.
 - **Title formatting:** dots→spaces, `:`→` - `, hyphens preserved, Chicago/AP
   title-case with mid-title stopwords lowercased (explicit source capitals kept
-  and flagged), acronym map applied.
+  and flagged for verification), acronym map applied.
 - **Movies:** `Title (Year)`; AKA keeps the English (right) side.
 - **Sidecars:** `.srt/.sub/.idx/.ass/.ssa/.vtt` renamed alongside the video,
   preserving recognised language codes; unknown tokens dropped.
 - **Junk:** anything not video/subtitle, plus name patterns
   (`sample/screens/proof/thumbs`) → offered for deletion to Trash.
-- **Conflicts:** multiple sources → one destination are all skipped & flagged;
+- **Conflicts:** multiple sources → one destination are flagged. The original
+  CLI only *skips* them; this app adds a **resolver** — keep them all by giving
+  each a **version label** (parsed from quality: `2160p Remux`, `1080p WEB-DL`,
+  edition cuts) rendered as `Title (Year) - 2160p.mkv` in one shared folder
+  (Plex/Jellyfin "versions"). Unresolved conflicts are skipped at apply;
   existing-on-disk targets are skipped.
 - **Library folders** (`Movies/Music/TV`) and hidden/metadata files are ignored.
 
-**Status:** the engine is **MVP-complete and parity-tested** (`RenamerCore`):
-parsing/formatting, year & episode detection, sidecar language handling,
-planning, conflict detection, and execution (apply moves + `rmdir`-empty +
-native Trash). The remaining MVP work is the SwiftUI app — preview + apply
-button — built in Xcode. Junk *detection* is done; the junk *panel* is M4.
+**Status:** the engine and the app are both built. The app delivers preview,
+editable titles/years, acronym casing, junk→Trash, real apply (moves +
+empty-folder cleanup + Trash), and duplicate-version resolution.
 
 ---
 
-## 6. MVP
+## 6. MVP — Delivered
 
-**Pick a folder → see the plan → apply it.** The smallest genuinely useful app.
+The MVP — **pick a folder → see the plan → apply it** — is built, plus several
+features beyond the original MVP line:
 
-- Folder picker (`.fileImporter`), scan one level deep.
-- Build & render the plan read-only: TV / Movies / Unchanged / Skipped /
-  Titles-to-verify, before→after, conflict flags, summary counts.
-- **Apply:** perform the renames; send junk to Trash; show a result log. Confirm
-  dialog before applying. (Default acronym handling; no chips yet.)
+- Folder picker (`.fileImporter`), one-level scan.
+- Sidebar + inspector preview: TV / Movies / Unchanged / Skipped, before→after,
+  flag badges (duplicate / junk / verify), summary counts.
+- **Editable titles** (+ movie year) with live re-plan.
+- **Acronym** keep/Title chips, remembered across launches.
+- **Junk → Trash** checkboxes.
+- **Apply:** real renames + empty-source cleanup + junk to the Trash, behind a
+  confirm dialog, with a result summary; the folder re-scans afterward.
+- **Duplicate-version resolver** (beyond the original MVP scope).
 
-Out of MVP: acronym chips, editable titles, undo UI, online verification,
-settings, packaging.
+Not yet: undo UI, online verification, a broader settings surface, packaging.
+
+### Known limitations
+- **Re-apply idempotency.** After Apply, the re-scan re-parses a freshly resolved
+  pair (`Title (Year) - 1080p.mkv` + `- 2160p.mkv`, now sharing one folder) back
+  to the same base name and re-flags the conflict. It is **non-destructive**
+  (apply skips conflicts) and **self-healing** (clicking Resolve again is a
+  no-op). True idempotency needs the parser to recognise a ` - <label>` version
+  tail — a planned engine change.
+- **Synchronous apply.** Fine for typical folders; large trees would benefit from
+  moving the work off the main actor.
+- **Resolver + in-folder sidecars.** When multiple versions *and* their subtitle
+  sidecars live in one folder, the resolver lists each colliding file separately;
+  labelling them consistently still produces correct output, but it is more
+  manual than the common loose-file case.
 
 ---
 
 ## 7. Roadmap
 
-| Milestone | Adds |
+| Milestone | State |
 |---|---|
-| **M0 — Parsing core** ✅ | `RenamerCore` parsing/formatting/sidecar rules, parity-tested |
-| **M1 — Plan model** ✅ | Folder scan, `PlanBuilder`, `ConflictChecker` — all parity-tested |
-| **M2 — Preview UI** | SwiftUI app: pick folder → read-only preview (needs Xcode) |
-| **M3 — Apply** | engine ✅ (`Executor` + `Trasher`, conflict/exists skipping, tested); Apply button + result log (UI) pending |
-| **M4 — Junk + acronyms** | Junk panel (checkboxes → Trash); acronym toggle chips (full CLI parity reached here) |
-| **M5 — Quality of life** | Editable titles before apply; remembered settings (recent folders, acronyms) |
-| **M6 — Undo** | Reverse the last applied batch in one action |
-| **M7 — Online verify** | Opt-in TMDb/TVDB confirmation + cache |
-| **M8 — Package** | Notarised `.app`, app icon, double-click launch |
+| **M0 — Parsing core** | ✅ `RenamerCore` parsing/formatting/sidecar rules, parity-tested |
+| **M1 — Plan model** | ✅ folder scan, `PlanBuilder`, `ConflictChecker` — parity-tested |
+| **M2 — Preview UI** | ✅ SwiftUI split-view: pick folder → preview |
+| **M3 — Apply** | ✅ `Executor` + `Trasher`; Apply button, confirm dialog, result summary |
+| **M4 — Junk + acronyms** | ✅ junk checkboxes + acronym chips — **CLI parity reached here** |
+| **M5 — Editable titles** | ✅ live re-plan on title/year edits; acronyms remembered |
+| **M5.5 — Duplicate resolver** | ✅ version-label resolution (new capability beyond the CLI) |
+| **M6 — Undo** | ⬜ reverse the last applied batch (engine records moves; UI pending) |
+| **M7 — Online verify** | ⬜ opt-in TMDb/TVDB confirmation + cache |
+| **M8 — Package** | ⬜ notarised `.app`, app icon, double-click launch |
+| **— Idempotent re-scan** | ⬜ parser recognises ` - <label>` version tails (clears the known limitation) |
 
-Parity with the old CLI is reached at **M4**; everything after is new capability.
+Parity with the old CLI was reached at **M4**; everything after is new capability.
 
 ---
 
@@ -183,12 +237,18 @@ Parity with the old CLI is reached at **M4**; everything after is new capability
 
 - `MediaType` — `.tv / .movie / .unknown`.
 - `MediaParse` — parsed fields (title, episode code, season, preserved stopwords).
-- *(planned)* `RenameEntry` — a source URL + parse + computed destination +
-  status + conflict flag; editable.
-- *(planned)* `RenamePlan` — `@Observable` collection of entries; re-plans on
-  edit; the single thing the UI binds to.
-- *(planned)* `Operation` — a reversible move / mkdir / trash; the unit of apply
-  and undo.
+- `NodePlan` — one top-level entry's plan: `source`, `mediaType`, `status`
+  (`.rename / .unchanged / .skip`), `operations`, `junk`, `previewPairs`,
+  verify info, the editable `editTitle`/`editYear`, and `units`.
+- `RenameUnit` — one output file (a video or one of its sidecars): `episodeCode`,
+  `season`, `languageSuffix`, `ext`, and `disambiguationSuffix` (the resolver's
+  version label). Carries just enough to recompute its destination on an edit.
+- `Operation` — `.move(from:to:)` / `.removeEmptyDirectory(_:)`; the unit of
+  apply (and a future undo).
+- `Plan` — `root` + `nodes` + `conflicts`; `conflictGroups` /
+  `conflictGroup(containing:)` expose colliding sets to the UI.
+- `ApplyResult` — moved / conflict / error / trashed counts, `completedMoves`
+  (undo groundwork), and human-readable messages.
 
 Execution always goes through the engine, so any future second front-end applies
 changes through identical code.
@@ -197,10 +257,12 @@ changes through identical code.
 
 ## 9. Testing
 
-- `swift test` runs the engine suite headlessly (no Xcode, no display) — the
-  parity contract for every rule.
-- New parsing/planning code lands with mirrored cases from the Python
-  `tests/test_renamer.py` oracle.
+- `swift test --package-path RenamerCore` runs the engine suite headlessly
+  (no Xcode, no display) — **69 tests across 8 suites**, the parity contract for
+  every rule.
+- New parsing/planning/execution code lands with mirrored cases from the Python
+  `tests/test_renamer.py` oracle. The quality-tag and duplicate-resolve suites
+  are **new** (no oracle — the Python CLI only detects and skips conflicts).
 - SwiftUI views stay thin; logic lives in the testable engine. UI tests are
   post-MVP.
 
@@ -208,9 +270,12 @@ changes through identical code.
 
 ## 10. Open Decisions
 
-1. **App project layout** — Xcode project at repo root referencing
-   `./RenamerCore` via a local package path (recommended) vs an Xcode workspace.
+1. ~~App project layout.~~ **Resolved:** an Xcode project under `MediaRenamer/`
+   references `../RenamerCore` via a local Swift-package path.
 2. **Online verification provider** — TMDb vs TVDB; API-key storage (Keychain).
    Deferred to M7.
 3. **Undo depth** — last run only (recommended) vs a multi-step history.
-4. **Settings surface** — `@AppStorage` for the MVP; revisit if it grows.
+4. **Settings surface** — `UserDefaults` for now (acronyms persisted); revisit if
+   it grows.
+5. **App deployment target** — currently the SDK default (macOS 26.5). Lower it
+   to widen the supported OS range before any real distribution.

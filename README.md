@@ -8,32 +8,35 @@ subtitle sidecars) into a Plex/Jellyfin-friendly tree:
 
 A ground-up Swift rebuild of an earlier Python CLI. The Python project
 (`~/Dev/tv-show-renamer`) is kept only as the behavioural spec and test oracle —
-no Python ships here. See [`SPEC.md`](SPEC.md) for the full plan.
+no Python ships here. See [`SPEC.md`](SPEC.md) for the full design and roadmap.
 
 ## Layout
 
 ```
-RenamerCore/      Swift Package — the engine (pure logic, no UI). Testable headlessly.
-MediaRenamer/     (planned) the SwiftUI app, added once developed in Xcode.
-SPEC.md           Full specification + roadmap.
+RenamerCore/   Swift Package — the engine (pure logic, Foundation only). Headlessly testable.
+MediaRenamer/  The SwiftUI app (Xcode project); depends on ../RenamerCore as a local package.
+SPEC.md        Full specification + roadmap.
 ```
 
 ## Status
 
-Early. The engine's **parsing layer** is ported and parity-tested against the
-Python oracle: classification, episode/year detection, title formatting, and
-subtitle-language detection. Planning, conflict detection, junk handling,
-execution, and the SwiftUI app are next (see the roadmap in `SPEC.md`).
+**Working app.** Pick a folder → preview the plan → edit titles, set acronym
+casing, choose which junk to trash, resolve duplicate versions → **Apply**
+(real renames + empty-folder cleanup + junk to the macOS Trash). The engine is
+parity-tested against the Python oracle (69 tests).
 
-## Developing & testing the engine
+Not built yet: undo UI, online title verification, and a packaged `.app`
+(see the roadmap in `SPEC.md`).
 
-The engine needs only the Swift toolchain (no Xcode app) to build and test:
+## Run the app
+
+Open `MediaRenamer/MediaRenamer.xcodeproj` in Xcode and press ⌘R. Preview is
+read-only; only **Apply** touches disk, and it confirms first. Try it on a copy.
+
+## Test the engine
+
+The engine builds and tests with just the Swift toolchain (no Xcode app):
 
 ```sh
 swift test --package-path RenamerCore
 ```
-
-> First run requires the Xcode license to be accepted once:
-> `sudo xcodebuild -license accept`
-
-The SwiftUI app target (M2 onward) is built and previewed in **Xcode**.
