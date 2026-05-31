@@ -6,6 +6,10 @@ public enum Operation: Equatable, Sendable {
     case move(from: URL, to: URL)
     /// Remove the source directory if it is empty after its contents moved out.
     case removeEmptyDirectory(URL)
+
+    public var isMove: Bool {
+        if case .move = self { return true } else { return false }
+    }
 }
 
 /// What will happen to a top-level node.
@@ -22,6 +26,27 @@ public struct PreviewPair: Equatable, Sendable {
     public init(old: String, new: String) {
         self.old = old
         self.new = new
+    }
+}
+
+/// One output file in a rename node — carries just enough to recompute its
+/// destination when the user edits the title/year, without re-scanning or
+/// re-parsing. Season/episode code stay fixed; only the title (and movie year)
+/// are user-editable.
+public struct RenameUnit: Equatable, Sendable {
+    public let source: URL
+    public let episodeCode: String?    // TV video & its sidecars; nil for movies
+    public let season: Int?            // TV
+    public let languageSuffix: String  // sidecar language (".eng"), else ""
+    public let ext: String             // ".mkv", ".srt", …
+
+    public init(source: URL, episodeCode: String?, season: Int?,
+                languageSuffix: String, ext: String) {
+        self.source = source
+        self.episodeCode = episodeCode
+        self.season = season
+        self.languageSuffix = languageSuffix
+        self.ext = ext
     }
 }
 
@@ -44,6 +69,14 @@ public struct NodePlan: Equatable, Sendable, Identifiable {
     public var verifyTitle: String
     public var verifyWords: [String]
 
+    // Editable fields (rename nodes only) — drive `PlanBuilder.replan`.
+    /// Show name (TV) or movie title without the year (movie).
+    public var editTitle: String
+    /// Release year (movie); "" for TV.
+    public var editYear: String
+    /// Per-output-file data used to recompute destinations on edit.
+    public var units: [RenameUnit]
+
     public var id: URL { source }
 
     public init(
@@ -55,7 +88,10 @@ public struct NodePlan: Equatable, Sendable, Identifiable {
         junk: [URL] = [],
         previewPairs: [PreviewPair] = [],
         verifyTitle: String = "",
-        verifyWords: [String] = []
+        verifyWords: [String] = [],
+        editTitle: String = "",
+        editYear: String = "",
+        units: [RenameUnit] = []
     ) {
         self.source = source
         self.mediaType = mediaType
@@ -66,6 +102,9 @@ public struct NodePlan: Equatable, Sendable, Identifiable {
         self.previewPairs = previewPairs
         self.verifyTitle = verifyTitle
         self.verifyWords = verifyWords
+        self.editTitle = editTitle
+        self.editYear = editYear
+        self.units = units
     }
 }
 
