@@ -122,6 +122,18 @@ struct ParsingTests {
         #expect(TitleFormatter.normalise("X: Men") == "X - Men")
     }
 
+    /// Swift-side divergence from the oracle: 4-letter prepositions and the
+    /// remaining coordinating conjunctions are lowercased mid-title so canonical
+    /// media titles match TVDB/Plex casing. Edge words stay capitalised.
+    @Test func titleLongConnectorsLowercased() {
+        #expect(TitleFormatter.titleCase("last week tonight with john oliver")
+                == "Last Week Tonight with John Oliver")
+        #expect(TitleFormatter.titleCase("how to get away with murder")
+                == "How to Get Away with Murder")
+        #expect(TitleFormatter.titleCase("from dusk till dawn")        // edge "from" capitalised
+                == "From Dusk Till Dawn")
+    }
+
     // MARK: - preservedStopwords()
 
     @Test func stopwordsFlagsMidCapital() {
