@@ -161,7 +161,6 @@ struct PlanGroups {
     let movieRename: [NodePlan]
     let unchanged: [NodePlan]
     let skipped: [NodePlan]
-    let verify: [NodePlan]
     let junkCount: Int
 
     init(_ plan: Plan) {
@@ -169,7 +168,6 @@ struct PlanGroups {
         movieRename = plan.nodes.filter { $0.mediaType == .movie && $0.status == .rename }
         unchanged = plan.nodes.filter { $0.status == .unchanged }
         skipped = plan.nodes.filter { $0.status == .skip }
-        verify = plan.nodes.filter { !$0.verifyTitle.isEmpty }
         junkCount = plan.nodes.reduce(0) { $0 + $1.junk.count }
     }
 }
