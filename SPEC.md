@@ -197,19 +197,18 @@ features beyond the original MVP line:
 
 Not yet: undo UI, online verification, a broader settings surface, packaging.
 
+The engine is **idempotent**: it recognises its own `Title (Year) - <label>` output
+(the parser preserves a ` - <label>` version tail after a canonical year, and
+sidecars inherit their video's label), so re-scanning an already-organised folder
+is a no-op rather than a re-flagged conflict.
+
 ### Known limitations
-- **Re-apply idempotency.** After Apply, the re-scan re-parses a freshly resolved
-  pair (`Title (Year) - 1080p.mkv` + `- 2160p.mkv`, now sharing one folder) back
-  to the same base name and re-flags the conflict. It is **non-destructive**
-  (apply skips conflicts) and **self-healing** (clicking Resolve again is a
-  no-op). True idempotency needs the parser to recognise a ` - <label>` version
-  tail — a planned engine change.
 - **Synchronous apply.** Fine for typical folders; large trees would benefit from
   moving the work off the main actor.
 - **Resolver + in-folder sidecars.** When multiple versions *and* their subtitle
-  sidecars live in one folder, the resolver lists each colliding file separately;
-  labelling them consistently still produces correct output, but it is more
-  manual than the common loose-file case.
+  sidecars live in one folder, the resolver lists each colliding file separately
+  on first resolve; the labelled output is correct and re-scans cleanly, but the
+  first pass is more manual than the common loose-file case.
 
 ---
 
@@ -227,7 +226,7 @@ Not yet: undo UI, online verification, a broader settings surface, packaging.
 | **M6 — Undo** | ⬜ reverse the last applied batch (engine records moves; UI pending) |
 | **M7 — Online verify** | ⬜ opt-in TMDb/TVDB confirmation + cache |
 | **M8 — Package** | ⬜ notarised `.app`, app icon, double-click launch |
-| **— Idempotent re-scan** | ⬜ parser recognises ` - <label>` version tails (clears the known limitation) |
+| **— Idempotent re-scan** | ✅ parser preserves our ` - <label>` version tails, so re-scanning resolved files is a no-op |
 
 Parity with the old CLI was reached at **M4**; everything after is new capability.
 

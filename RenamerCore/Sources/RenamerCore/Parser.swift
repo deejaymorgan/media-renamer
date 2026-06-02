@@ -72,7 +72,8 @@ public enum MediaParser {
             title: normalised.isEmpty ? "Unknown" : normalised,
             preservedStopwords: preserved,
             episodeCode: codeStr.uppercased(),
-            season: season
+            season: season,
+            versionLabel: versionLabel(in: name[matchRange.upperBound...])
         )
     }
 
@@ -94,10 +95,35 @@ public enum MediaParser {
             title = String(title[r.upperBound...].drop(while: { $0 == " " }))
         }
 
+        // A version tail (`Title (Year) - <label>`) is only ours when the year is
+        // canonical `(YYYY)`; scene tails sit after a `.`, not a ` - `.
+        let before = span.lowerBound > name.startIndex
+            ? name[name.index(before: span.lowerBound)] : nil
+        let after = span.upperBound < name.endIndex ? name[span.upperBound] : nil
+        let label = (before == "(" && after == ")")
+            ? versionLabel(in: name[span.upperBound...]) : ""
+
         let preserved = TitleFormatter.preservedStopwords(title)
         let normalised = TitleFormatter.normalise(title, acronyms: acronyms)
         let finalTitle = normalised.isEmpty ? "Unknown" : normalised
-        return MediaParse(title: "\(finalTitle) (\(year))", preservedStopwords: preserved)
+        return MediaParse(title: "\(finalTitle) (\(year))",
+                          preservedStopwords: preserved,
+                          versionLabel: label)
+    }
+
+    /// If the text immediately after the year/episode code is one of our own
+    /// ` - <label>` version tails (space-hyphen-space, after the optional `)` of
+    /// a canonical year), return the label; otherwise "". This is what makes the
+    /// engine idempotent: a file we already named keeps its label on re-scan.
+    static func versionLabel(in remainder: Substring) -> String {
+        var s = remainder
+        if s.first == ")" { s = s.dropFirst() }     // canonical (YYYY) closing paren
+        guard s.first == " " else { return "" }      // require the leading space …
+        s = s.drop(while: { $0 == " " })
+        guard s.first == "-" else { return "" }      // … then the hyphen …
+        s = s.dropFirst()
+        guard s.first == " " else { return "" }      // … then a trailing space.
+        return String(s).trimmingCharacters(in: .whitespaces)
     }
 
     /// The portion of a filename before its episode code (TV) or year (movie),

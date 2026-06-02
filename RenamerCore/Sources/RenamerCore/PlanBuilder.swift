@@ -128,7 +128,8 @@ public enum PlanBuilder {
         let (title, year) = isTV ? (parse.title, "") : splitMovieTitle(parse.title)
         let unit = RenameUnit(
             source: path, episodeCode: parse.episodeCode, season: parse.season,
-            languageSuffix: "", ext: Str.splitext(path.lastPathComponent).ext)
+            languageSuffix: "", ext: Str.splitext(path.lastPathComponent).ext,
+            disambiguationSuffix: parse.versionLabel)
 
         var plan = NodePlan(source: path, mediaType: isTV ? .tv : .movie, status: .rename,
                             editTitle: title, editYear: year, units: [unit])
@@ -209,12 +210,15 @@ public enum PlanBuilder {
         for (video, p) in parses {
             units.append(RenameUnit(
                 source: video, episodeCode: p.episodeCode, season: p.season,
-                languageSuffix: "", ext: Str.splitext(video.lastPathComponent).ext))
+                languageSuffix: "", ext: Str.splitext(video.lastPathComponent).ext,
+                disambiguationSuffix: p.versionLabel))
+            // Sidecars inherit their video's version label so they stay paired.
             for s in sidecarMap[video] ?? [] {
                 units.append(RenameUnit(
                     source: s, episodeCode: p.episodeCode, season: p.season,
                     languageSuffix: Sidecars.languageSuffix(s.lastPathComponent),
-                    ext: Str.splitext(s.lastPathComponent).ext))
+                    ext: Str.splitext(s.lastPathComponent).ext,
+                    disambiguationSuffix: p.versionLabel))
             }
         }
 
