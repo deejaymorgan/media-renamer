@@ -23,9 +23,20 @@ public enum Constants {
     /// Connector words kept lowercase when they sit *between* the first and last
     /// word of a title (Chicago/AP convention): articles, short prepositions,
     /// coordinating conjunctions.
+    ///
+    /// The second block intentionally diverges from the Python oracle's
+    /// `TITLE_LOWERCASE_WORDS`, which lowercases only ≤3-letter words. The
+    /// 4-letter prepositions and the remaining coordinating conjunctions are
+    /// added so canonical titles like "Last Week Tonight with John Oliver" or
+    /// "How to Get Away with Murder" match TVDB/Plex casing instead of being
+    /// promoted to "...With...". Edge (first/last) words are always capitalised,
+    /// so this only affects mid-title occurrences.
     static let titleLowercaseWords: Set<String> = [
         "a", "an", "and", "as", "at", "but", "by", "en", "for",
         "if", "in", "of", "on", "or", "the", "to", "via", "vs",
+        // Swift-only additions (the oracle stops at ≤3-letter words):
+        "with", "from", "into", "onto", "over", "upon",  // 4-letter prepositions
+        "nor", "so", "yet",                              // coordinating conjunctions
     ]
 
     // MARK: Year detection
