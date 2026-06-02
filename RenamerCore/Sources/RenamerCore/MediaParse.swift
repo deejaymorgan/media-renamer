@@ -26,15 +26,23 @@ public struct MediaParse: Equatable, Sendable {
     /// TV only — season number (supports 4-digit year seasons like 2024).
     public var season: Int?
 
+    /// A version label this file already carries in our own output convention
+    /// (`Title (Year) - <label>.ext`), e.g. "2160p Remux". Preserved so that
+    /// re-scanning an already-resolved file reproduces its current name rather
+    /// than re-flagging a duplicate. Empty for ordinary inputs.
+    public var versionLabel: String
+
     public init(
         title: String,
         preservedStopwords: [String] = [],
         episodeCode: String? = nil,
-        season: Int? = nil
+        season: Int? = nil,
+        versionLabel: String = ""
     ) {
         self.title = title
         self.preservedStopwords = preservedStopwords
         self.episodeCode = episodeCode
         self.season = season
+        self.versionLabel = versionLabel
     }
 }
