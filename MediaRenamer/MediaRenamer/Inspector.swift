@@ -15,6 +15,14 @@ struct DetailView: View {
                 } else {
                     EmptyDetail()
                 }
+            case let .season(show, number)?:
+                if let node = plan.nodes.first(where: { $0.source == show }),
+                   let slice = node.seasonSlice(number) {
+                    SeasonInspectorView(node: node, slice: slice,
+                                        conflicts: plan.conflicts, model: model)
+                } else {
+                    EmptyDetail()
+                }
             case nil:
                 EmptyDetail()
             }
@@ -72,18 +80,21 @@ struct InspectorView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(spacing: 8) {
-                    Text(node.mediaType == .tv ? "TV episode pack" : "Movie")
-                        .font(.headline)
+                    Image(systemName: node.mediaType == .tv ? "tv" : "film")
+                        .foregroundStyle(.secondary)
+                    Text(node.displayTitle).font(.headline)
                     FlagBadges(node: node, conflicts: conflicts)
                     Spacer()
                 }
-                Text("from  \(node.originalName)")
+                Text(node.mediaType == .tv ? node.seasonSummary : "from  \(node.originalName)")
                     .font(.callout).foregroundStyle(.secondary)
                     .textSelection(.enabled)
 
                 VStack(alignment: .leading, spacing: 6) {
                     EditFields(node: node, model: model).id(node.source)
-                    Text("Title Case · hyphens preserved")
+                    Text(node.mediaType == .tv
+                         ? "Title Case · hyphens preserved · applies to every season"
+                         : "Title Case · hyphens preserved")
                         .font(.caption2).foregroundStyle(.secondary)
                 }
                 .padding(12)
@@ -99,6 +110,86 @@ struct InspectorView: View {
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+// MARK: - Season focus
+
+/// Focuses one season of a show: only that season's renames (or, if any of its
+/// files collide, just those resolvers). The title field stays available —
+/// editing it updates the whole show, not only this season.
+struct SeasonInspectorView: View {
+    let node: NodePlan
+    let slice: SeasonSlice
+    let conflicts: Set<URL>
+    let model: AppModel
+
+    private var conflictedHere: Bool { slice.sources.contains { conflicts.contains($0) } }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 8) {
+                    Image(systemName: "tv").foregroundStyle(.secondary)
+                    Text("\(node.displayTitle) · Season \(slice.number)").font(.headline)
+                    if conflictedHere {
+                        Label("duplicate", systemImage: "exclamationmark.triangle.fill")
+                            .labelStyle(.iconOnly).foregroundStyle(.red)
+                    }
+                    Spacer()
+                }
+                Text("\(slice.pairs.count) file\(slice.pairs.count == 1 ? "" : "s") in this season")
+                    .font(.callout).foregroundStyle(.secondary)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    EditFields(node: node, model: model).id(node.source)
+                    Text("Editing the title updates every season of this show.")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
+
+                if conflictedHere {
+                    SeasonConflicts(node: node, slice: slice, model: model)
+                } else {
+                    SeasonResultingFiles(slice: slice)
+                }
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+/// This season's resulting files (flat — already scoped to one season).
+struct SeasonResultingFiles: View {
+    let slice: SeasonSlice
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Resulting files").font(.subheadline).foregroundStyle(.secondary)
+            ForEach(Array(slice.pairs.enumerated()), id: \.offset) { _, pair in
+                PairRow(pair: pair)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// The duplicate resolvers for conflicts that involve this season's files.
+struct SeasonConflicts: View {
+    let node: NodePlan
+    let slice: SeasonSlice
+    let model: AppModel
+    var body: some View {
+        if let plan = model.plan {
+            let here = node.displayConflicts(in: plan)
+                .filter { c in c.group.contains { slice.sources.contains($0) } }
+            ForEach(Array(here.enumerated()), id: \.offset) { _, c in
+                ConflictResolveView(group: c.group, targetName: c.target, model: model)
+                    .id(c.group.map(\.path).joined())
+            }
         }
     }
 }
@@ -157,7 +248,7 @@ struct AllCard: View {
                         .foregroundStyle(.secondary)
                     Image(systemName: node.mediaType == .tv ? "tv" : "film")
                         .foregroundStyle(.secondary)
-                    Text(node.destinationDirectory)
+                    Text(node.displayTitle)
                         .fontWeight(.medium)
                         .lineLimit(1).truncationMode(.middle)
                     Spacer()
@@ -178,7 +269,7 @@ struct AllCard: View {
                     if !node.junk.isEmpty { JunkList(node: node, model: model) }
                 }
             } else {
-                Text("→ \(node.destinationDirectory) · \(node.previewPairs.count) file(s)")
+                Text("→ \(node.displayTitle) · \(node.seasonSummary)")
                     .font(.callout).foregroundStyle(.secondary)
                     .lineLimit(1).truncationMode(.middle)
             }
@@ -190,17 +281,37 @@ struct AllCard: View {
 
 // MARK: - Shared blocks
 
+/// A single before→after pair, monospaced.
+struct PairRow: View {
+    let pair: PreviewPair
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(pair.new).font(.system(.body, design: .monospaced))
+            Text("← \(pair.old)")
+                .font(.system(.caption, design: .monospaced))
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
 struct ResultingFiles: View {
     let node: NodePlan
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Resulting files").font(.subheadline).foregroundStyle(.secondary)
-            ForEach(Array(node.previewPairs.enumerated()), id: \.offset) { _, pair in
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(pair.new).font(.system(.body, design: .monospaced))
-                    Text("← \(pair.old)")
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(.secondary)
+            // TV shows list under per-season subheaders; movies stay flat.
+            if node.mediaType == .tv, !node.seasonSlices.isEmpty {
+                ForEach(node.seasonSlices) { slice in
+                    Text("Season \(slice.number)")
+                        .font(.caption).fontWeight(.semibold)
+                        .foregroundStyle(.secondary).padding(.top, 2)
+                    ForEach(Array(slice.pairs.enumerated()), id: \.offset) { _, pair in
+                        PairRow(pair: pair)
+                    }
+                }
+            } else {
+                ForEach(Array(node.previewPairs.enumerated()), id: \.offset) { _, pair in
+                    PairRow(pair: pair)
                 }
             }
         }

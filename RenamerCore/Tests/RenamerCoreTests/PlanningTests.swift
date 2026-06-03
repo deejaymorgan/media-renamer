@@ -134,6 +134,95 @@ struct PlanningTests {
         #expect(plan.conflicts.count == 2)
     }
 
+    // MARK: - loose-file grouping
+
+    /// Separate loose episodes of one show+season collapse into a single node,
+    /// the way a subfolder of the same episodes already does.
+    @Test func looseEpisodesSameSeasonGroupIntoOneNode() {
+        let root = makeTempRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        touch(root.appendingPathComponent("Foundation.S01E01.1080p.ATVP.WEB-DL.mkv"))
+        touch(root.appendingPathComponent("Foundation.S01E02.1080p.ATVP.WEB-DL.mkv"))
+        touch(root.appendingPathComponent("Foundation.S01E03.1080p.ATVP.WEB-DL.mkv"))
+
+        let tv = PlanBuilder.build(root: root).filter { $0.mediaType == .tv && $0.status == .rename }
+        #expect(tv.count == 1)                        // one node, not three
+        #expect(tv.first?.editTitle == "Foundation")
+        #expect(Set((tv.first?.previewPairs ?? []).map(\.new)) == [
+            "Foundation/Season 1/Foundation S01E01.mkv",
+            "Foundation/Season 1/Foundation S01E02.mkv",
+            "Foundation/Season 1/Foundation S01E03.mkv",
+        ])
+        // A loose group has no source folder, so it only ever moves files.
+        #expect(tv.first?.operations.allSatisfy(\.isMove) == true)
+    }
+
+    /// Loose episodes from two seasons of one show collapse into a single show
+    /// node; the seasons split at the destination (and are surfaced in the UI),
+    /// not as separate nodes.
+    @Test func looseEpisodesAcrossSeasonsGroupIntoOneShowNode() {
+        let root = makeTempRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        touch(root.appendingPathComponent("The.Expanse.S03E01.1080p.WEB-DL.mkv"))
+        touch(root.appendingPathComponent("The.Expanse.S03E02.1080p.WEB-DL.mkv"))
+        touch(root.appendingPathComponent("The.Expanse.S04E01.1080p.AMZN.WEB-DL.mkv"))
+
+        let tv = PlanBuilder.build(root: root).filter { $0.mediaType == .tv && $0.status == .rename }
+        #expect(tv.count == 1)                        // one node for the whole show
+        #expect(tv.first?.editTitle == "The Expanse")
+        #expect(tv.first?.previewPairs.count == 3)
+        let news = Set((tv.first?.previewPairs ?? []).map(\.new))
+        #expect(news.contains("The Expanse/Season 3/The Expanse S03E01.mkv"))
+        #expect(news.contains("The Expanse/Season 4/The Expanse S04E01.mkv"))
+    }
+
+    /// A stray loose episode folds into an existing subfolder node for the same
+    /// show, rather than standing alone. The folder keeps its identity.
+    @Test func looseEpisodeMergesIntoMatchingFolder() {
+        let root = makeTempRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let folder = root.appendingPathComponent("Severance")
+        touch(folder.appendingPathComponent("Season 1").appendingPathComponent("Severance S01E01.mkv"))
+        touch(root.appendingPathComponent("Severance.S01E02.1080p.ATVP.WEB-DL.mkv"))
+
+        let tv = PlanBuilder.build(root: root).filter { $0.mediaType == .tv }
+        #expect(tv.count == 1)                        // the stray folds in, not a 2nd node
+        #expect(tv.first?.source.lastPathComponent == "Severance")   // identity stays the folder
+        #expect(tv.first?.status == .rename)          // the loose file gives it work to do
+        let news = Set((tv.first?.previewPairs ?? []).map(\.new))
+        #expect(news.contains("Severance/Season 1/Severance S01E02.mkv"))
+    }
+
+    /// A loose file of a different season still folds into the show's folder
+    /// (a subfolder represents the whole show, not one season).
+    @Test func looseEpisodeMergesAcrossSeasonsIntoFolder() {
+        let root = makeTempRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let folder = root.appendingPathComponent("Severance")
+        touch(folder.appendingPathComponent("Season 1").appendingPathComponent("Severance S01E01.mkv"))
+        touch(root.appendingPathComponent("Severance.S02E01.1080p.ATVP.WEB-DL.mkv"))
+
+        let tv = PlanBuilder.build(root: root).filter { $0.mediaType == .tv }
+        #expect(tv.count == 1)
+        let news = Set((tv.first?.previewPairs ?? []).map(\.new))
+        #expect(news.contains("Severance/Season 2/Severance S02E01.mkv"))
+    }
+
+    /// Two loose copies of one movie (same title+year) group into one node —
+    /// which still reports the duplicate target for the version-label resolver.
+    @Test func looseMovieVersionsGroupIntoOneConflictedNode() {
+        let root = makeTempRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+        touch(root.appendingPathComponent("The.Thing.1982.1080p.BluRay.mkv"))
+        touch(root.appendingPathComponent("The.Thing.1982.2160p.UHD.BluRay.mkv"))
+
+        let plan = PlanBuilder.plan(root: root)
+        let movies = plan.nodes.filter { $0.mediaType == .movie }
+        #expect(movies.count == 1)                    // two versions, one node
+        #expect(movies.first?.previewPairs.count == 2)
+        #expect(plan.conflicts.count == 2)            // …still flagged as a duplicate
+    }
+
     // MARK: - group sidecars
 
     @Test func sidecarsSingleVideoCollectsAll() {

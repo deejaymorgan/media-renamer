@@ -2,10 +2,12 @@ import Foundation
 import Observation
 import RenamerCore
 
-/// What the sidebar has selected: "All items" mode, or one specific item.
+/// What the sidebar has selected: "All items" mode, a whole show/movie, or one
+/// season of a show (identified by the show's source URL + season number).
 enum Selection: Hashable {
     case all
     case item(URL)
+    case season(show: URL, number: Int)
 }
 
 /// How an all-caps word is rendered everywhere it appears.
@@ -34,6 +36,10 @@ final class AppModel {
     /// Outcome of the most recent Apply.
     private(set) var lastResult: ApplyResult?
 
+    /// TV show nodes (keyed by source URL) whose season children are expanded in
+    /// the sidebar. Reset to "all multi-season shows" when a folder is chosen.
+    private(set) var expandedShows: Set<URL> = []
+
     init() {
         if let data = UserDefaults.standard.data(forKey: Self.acronymDefaultsKey),
            let raw = try? JSONDecoder().decode([String: String].self, from: data) {
@@ -48,6 +54,27 @@ final class AppModel {
         acronymWords = PlanBuilder.allCapsWords(root: url)
         selection = nil
         rebuildPlan()
+        expandAllShows()
+    }
+
+    // MARK: Sidebar season tree
+
+    /// Source URLs of TV shows that span more than one season (the expandable rows).
+    private var multiSeasonShowSources: [URL] {
+        (plan?.nodes ?? [])
+            .filter { $0.mediaType == .tv && $0.status == .rename && $0.isMultiSeason }
+            .map(\.source)
+    }
+
+    /// Whether any show has multiple seasons (drives the Expand/Collapse bar).
+    var hasMultiSeasonShow: Bool { !multiSeasonShowSources.isEmpty }
+
+    func isShowExpanded(_ source: URL) -> Bool { expandedShows.contains(source) }
+    func expandAllShows() { expandedShows = Set(multiSeasonShowSources) }
+    func collapseAllShows() { expandedShows = [] }
+    func toggleShow(_ source: URL) {
+        if expandedShows.contains(source) { expandedShows.remove(source) }
+        else { expandedShows.insert(source) }
     }
 
     // MARK: Acronyms
@@ -172,6 +199,15 @@ struct PlanGroups {
     }
 }
 
+/// One season's slice of a TV show node: the season number and the before→after
+/// pairs (and their source URLs, for scoping conflicts) that land in it.
+struct SeasonSlice: Identifiable {
+    let number: Int
+    let pairs: [PreviewPair]
+    let sources: [URL]
+    var id: Int { number }
+}
+
 extension NodePlan {
     var originalName: String { source.lastPathComponent }
 
@@ -179,6 +215,45 @@ extension NodePlan {
         guard let first = previewPairs.first else { return originalName }
         let parts = first.new.split(separator: "/")
         return parts.count > 1 ? parts.dropLast().joined(separator: "/") : first.new
+    }
+
+    /// The label shown for the whole node: a TV show's name (seasons live below
+    /// it), or a movie's destination folder.
+    var displayTitle: String {
+        guard mediaType == .tv else { return destinationDirectory }
+        return editTitle.isEmpty ? originalName : editTitle
+    }
+
+    /// Distinct season numbers in this node, ascending. Empty for movies.
+    var seasonNumbers: [Int] { Set(units.compactMap(\.season)).sorted() }
+
+    var isMultiSeason: Bool { seasonNumbers.count > 1 }
+
+    /// The node's files grouped by season, ascending. `units[i]` aligns with
+    /// `previewPairs[i]` (both are built in unit order), so they zip cleanly.
+    var seasonSlices: [SeasonSlice] {
+        var byNumber: [Int: (pairs: [PreviewPair], sources: [URL])] = [:]
+        for (i, unit) in units.enumerated() {
+            guard let n = unit.season, i < previewPairs.count else { continue }
+            byNumber[n, default: ([], [])].pairs.append(previewPairs[i])
+            byNumber[n, default: ([], [])].sources.append(unit.source)
+        }
+        return byNumber.keys.sorted().map {
+            SeasonSlice(number: $0, pairs: byNumber[$0]!.pairs, sources: byNumber[$0]!.sources)
+        }
+    }
+
+    func seasonSlice(_ number: Int) -> SeasonSlice? { seasonSlices.first { $0.number == number } }
+
+    /// A one-line season + file-count summary, e.g. "Season 1 · 2 files" or
+    /// "Seasons 1–3 · 7 files" (a comma list when the seasons aren't contiguous).
+    var seasonSummary: String {
+        let ns = seasonNumbers
+        let files = "\(previewPairs.count) file\(previewPairs.count == 1 ? "" : "s")"
+        guard let lo = ns.first, let hi = ns.last else { return files }
+        if ns.count == 1 { return "Season \(lo) · \(files)" }
+        let span = (hi - lo == ns.count - 1) ? "\(lo)–\(hi)" : ns.map(String.init).joined(separator: ", ")
+        return "Seasons \(span) · \(files)"
     }
 
     func isConflicted(in conflicts: Set<URL>) -> Bool {

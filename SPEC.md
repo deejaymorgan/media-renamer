@@ -99,12 +99,15 @@ media-renamer/
 ### UI shape
 A `NavigationSplitView`: a **sidebar** lists the plan grouped into All items /
 TV / Movies / Unchanged / Skipped, each row flagged for duplicate / junk /
-verify; the **detail inspector** shows the selected item (or an "All" mode of
-collapsible, individually-editable cards). The inspector edits the title (and,
-for movies, the year), lists the resulting files, offers per-file junk→Trash
-checkboxes, and — for a duplicate target — an interactive resolver. An acronym
-bar (keep vs Title-case chips) appears when all-caps words are detected; a bottom
-bar applies the plan behind a confirmation dialog.
+verify. A multi-season show is one row that **expands into a Show → Season tree**
+(with Expand-all / Collapse-all): selecting the show edits/acts on every season,
+selecting a season focuses just that one. The **detail inspector** shows the
+selected item (or an "All" mode of collapsible, individually-editable cards). The
+inspector edits the title (and, for movies, the year), lists the resulting files
+(grouped by season for TV), offers per-file junk→Trash checkboxes, and — for a
+duplicate target — an interactive resolver. An acronym bar (keep vs Title-case
+chips) appears when all-caps words are detected; a bottom bar applies the plan
+behind a confirmation dialog.
 
 ### Principles
 - **Engine is pure & dependency-free** (Foundation only). It returns data; the
@@ -172,6 +175,16 @@ Verbatim behaviour from `~/Dev/tv-show-renamer`, pinned by parity tests:
   edition cuts) rendered as `Title (Year) - 2160p.mkv` in one shared folder
   (Plex/Jellyfin "versions"). Unresolved conflicts are skipped at apply;
   existing-on-disk targets are skipped.
+- **Loose-file grouping (new — beyond the CLI):** loose files at the root that
+  share a show (TV) or title+year (movie) collapse into one node, the way a
+  subfolder of the same files already does — so scattered episodes of a show land
+  together. Grouping is **per show** for TV; a show's seasons are split at the
+  destination (`Season N/`) and surfaced in the sidebar as a **Show → Season
+  tree** rather than as separate nodes. When the root *also* holds a subfolder for
+  that same show/movie, the loose files fold into **its** node instead (a
+  subfolder represents the whole show, so a stray file of any season joins it).
+  Two loose copies of one title group together and still surface as a duplicate
+  for the version-label resolver.
 - **Library folders** (`Movies/Music/TV`) and hidden/metadata files are ignored.
 
 **Status:** the engine and the app are both built. The app delivers preview,
@@ -209,6 +222,9 @@ is a no-op rather than a re-flagged conflict.
   sidecars live in one folder, the resolver lists each colliding file separately
   on first resolve; the labelled output is correct and re-scans cleanly, but the
   first pass is more manual than the common loose-file case.
+- **Loose sidecars aren't grouped.** Loose-file grouping collects videos only; a
+  subtitle sitting loose at the root (not inside a folder) is still listed as an
+  individual skipped entry rather than following its grouped video.
 
 ---
 
@@ -223,6 +239,7 @@ is a no-op rather than a re-flagged conflict.
 | **M4 — Junk + acronyms** | ✅ junk checkboxes + acronym chips — **CLI parity reached here** |
 | **M5 — Editable titles** | ✅ live re-plan on title/year edits; acronyms remembered |
 | **M5.5 — Duplicate resolver** | ✅ version-label resolution (new capability beyond the CLI) |
+| **M5.6 — Loose-file grouping** | ✅ scattered same-show (and movie-version) loose files group like a subfolder; merge into a matching subfolder; seasons shown as a sidebar Show → Season tree |
 | **M6 — Undo** | ⬜ reverse the last applied batch (engine records moves; UI pending) |
 | **M7 — Online verify** | ⬜ opt-in TMDb/TVDB confirmation + cache |
 | **M8 — Package** | ⬜ notarised `.app`, app icon, double-click launch |
