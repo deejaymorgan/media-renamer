@@ -14,9 +14,19 @@ struct SidebarView: View {
 
                 if !g.tvRename.isEmpty {
                     Section("TV") {
-                        ForEach(g.tvRename) { node in
-                            SidebarRow(node: node, conflicts: plan.conflicts)
-                                .tag(Selection.item(node.source))
+                        ForEach(g.tvRename) { show in
+                            ShowRow(node: show, conflicts: plan.conflicts,
+                                    expanded: model.isShowExpanded(show.source),
+                                    canExpand: show.isMultiSeason,
+                                    toggle: { model.toggleShow(show.source) })
+                                .tag(Selection.item(show.source))
+
+                            if show.isMultiSeason, model.isShowExpanded(show.source) {
+                                ForEach(show.seasonSlices) { slice in
+                                    SeasonRow(slice: slice, conflicts: plan.conflicts)
+                                        .tag(Selection.season(show: show.source, number: slice.number))
+                                }
+                            }
                         }
                     }
                 }
@@ -44,6 +54,81 @@ struct SidebarView: View {
                 }
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if model.hasMultiSeasonShow {
+                HStack(spacing: 12) {
+                    Button("Expand all") { model.expandAllShows() }
+                    Button("Collapse all") { model.collapseAllShows() }
+                    Spacer()
+                }
+                .font(.caption)
+                .buttonStyle(.borderless)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                .background(.bar)
+            }
+        }
+    }
+}
+
+/// A TV show row: a disclosure chevron (when the show spans multiple seasons),
+/// the show name, and a season/file summary. Selecting it focuses the whole show
+/// — every season's files, one title edit for all.
+struct ShowRow: View {
+    let node: NodePlan
+    let conflicts: Set<URL>
+    let expanded: Bool
+    let canExpand: Bool
+    let toggle: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Button(action: toggle) {
+                Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                    .font(.caption2).foregroundStyle(.secondary)
+                    .frame(width: 12)
+            }
+            .buttonStyle(.plain)
+            .opacity(canExpand ? 1 : 0)
+            .disabled(!canExpand)
+
+            Image(systemName: "tv").foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(node.displayTitle)
+                    .lineLimit(1).truncationMode(.middle)
+                Text(node.seasonSummary)
+                    .font(.caption).foregroundStyle(.secondary)
+                    .lineLimit(1).truncationMode(.middle)
+            }
+            Spacer(minLength: 4)
+            FlagBadges(node: node, conflicts: conflicts, compact: true)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+/// An indented season row under a show. Selecting it focuses just that season.
+struct SeasonRow: View {
+    let slice: SeasonSlice
+    let conflicts: Set<URL>
+
+    private var conflicted: Bool { slice.sources.contains { conflicts.contains($0) } }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Spacer().frame(width: 18)                 // indent under the show's icon
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Season \(slice.number)").lineLimit(1)
+                Text("\(slice.pairs.count) file\(slice.pairs.count == 1 ? "" : "s")")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 4)
+            if conflicted {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.caption2).foregroundStyle(.red)
+            }
+        }
+        .padding(.vertical, 1)
     }
 }
 

@@ -1,7 +1,10 @@
 import Foundation
 
 /// Turns an input folder into node plans (and a full `Plan` with conflicts).
-/// Ported from `plan_input_dir` / `plan_loose` / `plan_folder`.
+/// Ported from `plan_input_dir` / `plan_loose` / `plan_folder`, extended so that
+/// loose files belonging to the same show (TV) or title+year (movie) are
+/// grouped into one node the way a subfolder already is — and merge into a
+/// matching subfolder's node when one exists.
 public enum PlanBuilder {
 
     /// Build a full plan (nodes + conflicts) for `root`.
@@ -10,21 +13,93 @@ public enum PlanBuilder {
         return Plan(root: root, nodes: nodes, conflicts: ConflictChecker.detect(in: nodes))
     }
 
-    /// One `NodePlan` per top-level entry in `root`.
+    /// Node plans for `root`. Subfolders and unrecognised loose files keep their
+    /// own node; loose video files that share a show (TV) or title+year
+    /// (movie) collapse into a single node — and, when the root also holds a
+    /// subfolder for that same show/movie, fold into *its* node instead.
     public static func build(root: URL, acronyms: [String: String] = [:]) -> [NodePlan] {
-        var plans: [NodePlan] = []
-        for entry in Scanner.listDir(root) {
+        // Fixed nodes (subfolders + unrecognised loose files), keyed by their
+        // position in the listing so the final order matches the input.
+        var fixed: [Int: NodePlan] = [:]
+        // Recognised loose videos, awaiting grouping.
+        var loose: [(index: Int, url: URL, parse: MediaParse)] = []
+
+        for (i, entry) in Scanner.listDir(root).enumerated() {
             let base = entry.lastPathComponent
             if !Scanner.isDirectory(entry) {
-                plans.append(planFile(entry, root: root, acronyms: acronyms))
+                let ext = Str.splitext(base).ext.lowercased()
+                if !Constants.videoExtensions.contains(ext) {
+                    fixed[i] = NodePlan(source: entry, mediaType: .unknown, status: .skip,
+                                        note: "loose non-video file at root")
+                } else if let parse = MediaParser.tv(base, acronyms: acronyms)
+                            ?? MediaParser.movie(base, acronyms: acronyms) {
+                    loose.append((i, entry, parse))
+                } else {
+                    fixed[i] = NodePlan(source: entry, mediaType: .unknown, status: .skip,
+                                        note: "no episode code or release year")
+                }
             } else if Constants.ignoredFolderNames.contains(base.lowercased()) {
-                plans.append(NodePlan(source: entry, mediaType: .unknown, status: .skip,
-                                      note: "ignored library folder: \(base)"))
+                fixed[i] = NodePlan(source: entry, mediaType: .unknown, status: .skip,
+                                    note: "ignored library folder: \(base)")
             } else {
-                plans.append(planDirectory(entry, root: root, acronyms: acronyms))
+                fixed[i] = planDirectory(entry, root: root, acronyms: acronyms)
             }
         }
-        return plans
+
+        // Group loose videos by show / title+year, in first-seen order.
+        var groups: [String: [(index: Int, url: URL, parse: MediaParse)]] = [:]
+        var order: [String] = []
+        for item in loose {
+            let key = groupKey(item.parse)
+            if groups[key] == nil { order.append(key) }
+            groups[key, default: []].append(item)
+        }
+
+        // Each group folds into a matching subfolder node, or becomes its own.
+        var grouped: [(index: Int, node: NodePlan)] = []
+        for key in order {
+            let items = groups[key]!
+            let parses = items.map { ($0.url, $0.parse) }
+            if let target = mergeTarget(for: items[0].parse, in: fixed) {
+                fixed[target] = merge(parses, into: fixed[target]!, root: root)
+            } else if items.count == 1 {
+                grouped.append((items[0].index,
+                                planLoose(items[0].url, root: root, parse: items[0].parse)))
+            } else {
+                grouped.append((items[0].index, planLooseGroup(parses, root: root)))
+            }
+        }
+
+        // Reassemble in input order (a loose group sits at its first member).
+        return (fixed.map { (index: $0.key, node: $0.value) } + grouped)
+            .sorted { $0.index < $1.index }
+            .map(\.node)
+    }
+
+    /// Grouping key: all TV files of one show share a node (seasons are split at
+    /// the destination and surfaced in the UI, not as separate nodes); movie
+    /// files group per title — which already carries the year, e.g. `"Inception (2010)"`.
+    private static func groupKey(_ p: MediaParse) -> String {
+        p.episodeCode != nil ? "tv\u{0}\(p.title)" : "movie\u{0}\(p.title)"
+    }
+
+    /// The index of a subfolder node this loose parse should fold into: a
+    /// non-skip TV folder for the same show, or movie folder for the same
+    /// title+year. Among several, prefer one that already holds this season,
+    /// else the earliest. nil when nothing matches.
+    private static func mergeTarget(for p: MediaParse, in fixed: [Int: NodePlan]) -> Int? {
+        let isTV = p.episodeCode != nil
+        let matches = fixed.filter { _, node in
+            guard node.status != .skip, node.mediaType == (isTV ? .tv : .movie) else { return false }
+            return isTV ? node.editTitle == p.title
+                        : "\(node.editTitle) (\(node.editYear))" == p.title
+        }.keys.sorted()
+        guard !matches.isEmpty else { return nil }
+        if isTV, let season = p.season,
+           let withSeason = matches.first(where: { fixed[$0]!.units.contains { $0.season == season } }) {
+            return withSeason
+        }
+        return matches.first
     }
 
     /// Unique all-caps words across the folder's video filenames — the
@@ -108,19 +183,49 @@ public enum PlanBuilder {
 
     // MARK: - Loose files
 
-    private static func planFile(_ entry: URL, root: URL, acronyms: [String: String]) -> NodePlan {
-        let base = entry.lastPathComponent
-        let ext = Str.splitext(base).ext.lowercased()
-        guard Constants.videoExtensions.contains(ext) else {
-            return NodePlan(source: entry, mediaType: .unknown, status: .skip,
-                            note: "loose non-video file at root")
+    /// One node for ≥2 loose videos that share a show (TV) or title+year
+    /// (movie). Like a subfolder node — one editable title, a `Season N/` split
+    /// at the destination — but with no source folder to remove. (Loose sidecars
+    /// are not paired here; they remain individual skip nodes, as before.)
+    private static func planLooseGroup(_ parses: [(URL, MediaParse)], root: URL) -> NodePlan {
+        let sorted = parses.sorted { $0.0.path < $1.0.path }
+        let isTV = sorted[0].1.episodeCode != nil
+        let title = sorted[0].1.title          // identical across the group by construction
+        let (editTitle, editYear) = isTV ? (title, "") : splitMovieTitle(title)
+
+        let units = sorted.map { video, p in
+            RenameUnit(source: video, episodeCode: p.episodeCode, season: p.season,
+                       languageSuffix: "", ext: Str.splitext(video.lastPathComponent).ext,
+                       disambiguationSuffix: p.versionLabel)
         }
-        guard let parse = MediaParser.tv(base, acronyms: acronyms)
-                ?? MediaParser.movie(base, acronyms: acronyms) else {
-            return NodePlan(source: entry, mediaType: .unknown, status: .skip,
-                            note: "no episode code or release year")
+        var plan = NodePlan(source: sorted[0].0, mediaType: isTV ? .tv : .movie,
+                            status: .rename, editTitle: editTitle, editYear: editYear, units: units)
+        let preserved = Set(sorted.flatMap { $0.1.preservedStopwords }).sorted()
+        if !preserved.isEmpty {
+            plan.verifyTitle = title
+            plan.verifyWords = preserved
         }
-        return planLoose(entry, root: root, parse: parse)
+        return recompute(plan, root: root)
+    }
+
+    /// Fold a loose group's videos into an existing subfolder node for the same
+    /// show/movie, then recompute its destinations. The folder's own files (and
+    /// its empty-source cleanup) are preserved; the loose files move in beside
+    /// them, splitting into `Season N/` as usual.
+    private static func merge(_ parses: [(URL, MediaParse)], into node: NodePlan, root: URL) -> NodePlan {
+        var updated = node
+        for (video, p) in parses.sorted(by: { $0.0.path < $1.0.path }) {
+            updated.units.append(RenameUnit(
+                source: video, episodeCode: p.episodeCode, season: p.season,
+                languageSuffix: "", ext: Str.splitext(video.lastPathComponent).ext,
+                disambiguationSuffix: p.versionLabel))
+        }
+        let extra = parses.flatMap { $0.1.preservedStopwords }
+        if !extra.isEmpty {
+            updated.verifyWords = Set(updated.verifyWords).union(extra).sorted()
+            if updated.verifyTitle.isEmpty { updated.verifyTitle = updated.editTitle }
+        }
+        return recompute(updated, root: root)
     }
 
     private static func planLoose(_ path: URL, root: URL, parse: MediaParse) -> NodePlan {
