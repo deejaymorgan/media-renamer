@@ -75,17 +75,25 @@ struct ReplanTests {
         ])
     }
 
-    /// Editing one of two colliding movies to a unique title clears the conflict.
+    /// Editing one of two colliding movie *folders* to a unique title clears the
+    /// conflict. (Two loose copies of one title now share a single node, so a
+    /// per-node title edit can't split them — that's the version-label resolver's
+    /// job; see ConflictResolveTests. Separate folders stay separate nodes.)
     @Test func replanResolvesConflict() {
         let root = makeTempRoot(); defer { try? fm.removeItem(at: root) }
-        touch(root.appendingPathComponent("Inception.2010.1080p.BluRay.x264.mkv"))
-        touch(root.appendingPathComponent("Inception.2010.720p.WEB.x264.mkv"))
+        let hd = root.appendingPathComponent("Inception.2010.1080p.BluRay.x264")
+        let sd = root.appendingPathComponent("Inception.2010.720p.WEB.x264")
+        touch(hd.appendingPathComponent("Inception.2010.1080p.BluRay.x264.mkv"))
+        touch(sd.appendingPathComponent("Inception.2010.720p.WEB.x264.mkv"))
 
         var plan = PlanBuilder.plan(root: root)
         #expect(plan.conflicts.count == 2)
 
-        let first = root.appendingPathComponent("Inception.2010.1080p.BluRay.x264.mkv")
-        plan = PlanBuilder.replan(plan, itemSource: first, title: "Inception Directors Cut", year: "2010")
+        // Use the node's own source URL — a directory listing can add a trailing
+        // slash that a hand-built URL lacks (the app always passes node.source).
+        let hdNode = node(plan.nodes, "Inception.2010.1080p.BluRay.x264")!
+        plan = PlanBuilder.replan(plan, itemSource: hdNode.source,
+                                  title: "Inception Directors Cut", year: "2010")
         #expect(plan.conflicts.isEmpty)
     }
 }

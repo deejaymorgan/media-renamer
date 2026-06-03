@@ -59,6 +59,7 @@ struct ConflictResolveTests {
 
     /// Two versions of the same movie collide on one destination; labelling them
     /// clears the conflict and yields two distinct files in one shared folder.
+    /// (Sharing a title+year, the two loose copies are grouped into one node.)
     @Test func labellingTwoVersionsClearsTheConflict() {
         let root = makeTempRoot(); defer { try? fm.removeItem(at: root) }
         let hd = root.appendingPathComponent("The.Thing.1982.1080p.BluRay.mkv")
@@ -76,11 +77,13 @@ struct ConflictResolveTests {
         let resolved = PlanBuilder.resolve(plan, suffixes: labels)
         #expect(resolved.conflicts.isEmpty)
 
-        let hdNode = resolved.nodes.first { $0.source == hd }
-        let uhdNode = resolved.nodes.first { $0.source == uhd }
-        #expect(hdNode?.status == .rename)
-        #expect(hdNode?.previewPairs.first?.new == "The Thing (1982)/The Thing (1982) - 1080p BluRay.mkv")
-        #expect(uhdNode?.previewPairs.first?.new == "The Thing (1982)/The Thing (1982) - 2160p BluRay.mkv")
+        // The two versions share one node; both resolved names appear in it.
+        let node = resolved.nodes.first { $0.mediaType == .movie }
+        #expect(node?.status == .rename)
+        #expect(Set((node?.previewPairs ?? []).map(\.new)) == [
+            "The Thing (1982)/The Thing (1982) - 1080p BluRay.mkv",
+            "The Thing (1982)/The Thing (1982) - 2160p BluRay.mkv",
+        ])
 
         // The whole chain executes: both move, nothing skipped.
         let result = Executor.apply(resolved)
