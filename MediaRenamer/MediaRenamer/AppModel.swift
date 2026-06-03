@@ -37,7 +37,7 @@ final class AppModel {
     private(set) var lastResult: ApplyResult?
 
     /// TV show nodes (keyed by source URL) whose season children are expanded in
-    /// the sidebar. Reset to "all multi-season shows" when a folder is chosen.
+    /// the sidebar. Reset to empty (all shows collapsed) when a folder is chosen.
     private(set) var expandedShows: Set<URL> = []
 
     init() {
@@ -54,7 +54,7 @@ final class AppModel {
         acronymWords = PlanBuilder.allCapsWords(root: url)
         selection = nil
         rebuildPlan()
-        expandAllShows()
+        collapseAllShows()
     }
 
     // MARK: Sidebar season tree
