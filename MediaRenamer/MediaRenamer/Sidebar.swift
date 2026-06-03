@@ -18,7 +18,10 @@ struct SidebarView: View {
                             ShowRow(node: show, conflicts: plan.conflicts,
                                     expanded: model.isShowExpanded(show.source),
                                     canExpand: show.isMultiSeason,
-                                    toggle: { model.toggleShow(show.source) })
+                                    onTap: {
+                                        model.selection = .item(show.source)
+                                        if show.isMultiSeason { model.toggleShow(show.source) }
+                                    })
                                 .tag(Selection.item(show.source))
 
                             if show.isMultiSeason, model.isShowExpanded(show.source) {
@@ -72,38 +75,41 @@ struct SidebarView: View {
 }
 
 /// A TV show row: a disclosure chevron (when the show spans multiple seasons),
-/// the show name, and a season/file summary. Selecting it focuses the whole show
-/// — every season's files, one title edit for all.
+/// the show name, and a season/file summary. The whole row is one button — a click
+/// selects the show (focusing every season's files under a single title edit) and,
+/// for a multi-season show, toggles its seasons open/closed. Clicking again keeps
+/// the show selected and toggles back. (We drive selection in the button action
+/// instead of relying on the List's tap, which a custom row gesture suppresses.)
 struct ShowRow: View {
     let node: NodePlan
     let conflicts: Set<URL>
     let expanded: Bool
     let canExpand: Bool
-    let toggle: () -> Void
+    let onTap: () -> Void
 
     var body: some View {
-        HStack(spacing: 6) {
-            Button(action: toggle) {
+        Button(action: onTap) {
+            HStack(spacing: 6) {
                 Image(systemName: expanded ? "chevron.down" : "chevron.right")
                     .font(.caption2).foregroundStyle(.secondary)
                     .frame(width: 12)
-            }
-            .buttonStyle(.plain)
-            .opacity(canExpand ? 1 : 0)
-            .disabled(!canExpand)
+                    .opacity(canExpand ? 1 : 0)
 
-            Image(systemName: "tv").foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(node.displayTitle)
-                    .lineLimit(1).truncationMode(.middle)
-                Text(node.seasonSummary)
-                    .font(.caption).foregroundStyle(.secondary)
-                    .lineLimit(1).truncationMode(.middle)
+                Image(systemName: "tv").foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(node.displayTitle)
+                        .lineLimit(1).truncationMode(.middle)
+                    Text(node.seasonSummary)
+                        .font(.caption).foregroundStyle(.secondary)
+                        .lineLimit(1).truncationMode(.middle)
+                }
+                Spacer(minLength: 4)
+                FlagBadges(node: node, conflicts: conflicts, compact: true)
             }
-            Spacer(minLength: 4)
-            FlagBadges(node: node, conflicts: conflicts, compact: true)
+            .padding(.vertical, 2)
+            .contentShape(Rectangle())
         }
-        .padding(.vertical, 2)
+        .buttonStyle(.plain)
     }
 }
 
