@@ -229,7 +229,6 @@ is a no-op rather than a re-flagged conflict.
   title-bar accessory (`NSTitlebarAccessoryViewController`) so the inspector
   title clears it correctly on the first layout (the SwiftUI sibling-bar +
   `NavigationSplitView` safe-area bug, `rdar://122947424`, no longer applies).
-  See [`docs/macos26-chrome-refinements.md`](docs/macos26-chrome-refinements.md).
 
 ---
 
