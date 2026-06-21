@@ -10,9 +10,9 @@ Pick a folder → preview the plan → tweak titles, set acronym casing, choose 
 junk to trash, resolve duplicate versions → **Apply**. Nothing on disk changes
 until you press Apply, and it asks for confirmation first.
 
-A ground-up Swift rebuild of an earlier Python CLI. The Python project
-(`~/Dev/tv-show-renamer`) is kept only as the behavioural spec and test oracle —
-no Python ships here. See [`SPEC.md`](SPEC.md) for the full design and roadmap.
+A ground-up Swift rebuild of an earlier (unpublished) Python CLI, which is kept
+privately only as the behavioural spec and test oracle — no Python ships here.
+See [`SPEC.md`](SPEC.md) for the full design and roadmap.
 
 ## Screenshots & quick start
 
