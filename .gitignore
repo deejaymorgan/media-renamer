@@ -8,6 +8,7 @@ Package.resolved
 
 # Xcode (the app target, added once Xcode is installed)
 DerivedData/
+build/
 *.xcuserstate
 xcuserdata/
 *.xcodeproj/project.xcworkspace/xcuserdata/

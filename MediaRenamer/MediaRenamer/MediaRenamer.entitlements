@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+  MediaRenamer entitlements.
+
+  Intentionally empty. This is a non-sandboxed Developer-ID app with the
+  Hardened Runtime enabled. For what the app actually does it needs no
+  entitlement exceptions:
+
+    * File moves/renames and Trash use FileManager (incl. trashItem); no
+      sandbox file entitlements apply (the sandbox is off) and no Apple Events
+      / automation entitlement is required.
+    * Folder selection uses NSOpenPanel; unrestricted without the sandbox.
+    * RenamerCore is a local Swift package compiled into the bundle and signed
+      with the same identity, so no library-validation exception is needed.
+    * No JIT, no unsigned executable memory, no DYLD env vars.
+
+  Add a com.apple.security.cs.* key here only if a real need appears.
+  Do NOT add sandbox keys (the sandbox is deliberately off for Developer-ID
+  distribution outside the App Store).
+-->
+<dict>
+</dict>
+</plist>
