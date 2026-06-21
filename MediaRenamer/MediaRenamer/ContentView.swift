@@ -94,7 +94,7 @@ struct SummaryChips: View {
                 if !plan.conflicts.isEmpty { chip("Conflicts", plan.conflicts.count, .red) }
                 if g.junkCount > 0 { chip("Junk", g.junkCount, .secondary) }
             }
-            .padding(.trailing, 8)
+            .padding(.horizontal, 8)
         }
     }
 
