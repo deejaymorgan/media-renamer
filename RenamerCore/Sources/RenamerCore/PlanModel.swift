@@ -127,18 +127,16 @@ public struct Plan: Sendable {
 }
 
 public extension Plan {
-    /// Sources that would move to the same destination, grouped by that shared
-    /// target (only groups of two or more). Each group is sorted by path so the
-    /// order is stable for display and tests.
+    /// Sources that would land on the same destination, grouped by that shared
+    /// target (only groups of two or more). Uses the same case-folded,
+    /// in-place-aware index as `ConflictChecker.detect`, so the resolver is
+    /// offered for exactly the collisions detection flags. Each group is sorted
+    /// by path so the order is stable for display and tests.
     var conflictGroups: [[URL]] {
-        var byDestination: [String: [URL]] = [:]
-        for node in nodes {
-            for case let .move(from, to) in node.operations {
-                byDestination[to.standardizedFileURL.path, default: []].append(from)
-            }
-        }
-        return byDestination.values
-            .filter { $0.count > 1 }
+        let index = ConflictChecker.destinationIndex(
+            in: nodes, caseInsensitive: ConflictChecker.caseInsensitiveVolume(root))
+        return index.values
+            .filter { Set($0).count > 1 }
             .map { $0.sorted { $0.path < $1.path } }
             .sorted { ($0.first?.path ?? "") < ($1.first?.path ?? "") }
     }

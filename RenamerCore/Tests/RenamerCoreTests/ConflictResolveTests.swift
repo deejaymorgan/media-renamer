@@ -57,6 +57,46 @@ struct ConflictResolveTests {
         fm.createFile(atPath: url.path, contents: Data())
     }
 
+    /// Is the temp volume case-insensitive (the macOS default)? The case-only
+    /// collision below only arises there.
+    private func isCaseInsensitive(_ root: URL) -> Bool {
+        let probe = root.appendingPathComponent("CaseProbe.tmp"); touch(probe)
+        defer { try? fm.removeItem(at: probe) }
+        return fm.fileExists(atPath: root.appendingPathComponent("caseprobe.TMP").path)
+    }
+
+    /// Two copies of one movie whose mid-title stopword case differs ("For" vs
+    /// "for") parse to titles differing only by case and target the same folder
+    /// on a case-insensitive volume. detection must flag them (it used to miss the
+    /// case-only collision, silently orphaning one file on Apply). (#3)
+    @Test func caseOnlyDestinationCollisionIsFlagged() {
+        let root = makeTempRoot(); defer { try? fm.removeItem(at: root) }
+        guard isCaseInsensitive(root) else { return }
+        touch(root.appendingPathComponent("Wicked.For.Good.2024.1080p.BluRay.mkv"))
+        touch(root.appendingPathComponent("wicked.for.good.2024.2160p.bluray.mkv"))
+
+        let plan = PlanBuilder.plan(root: root)
+        #expect(plan.conflicts.count == 2)
+        #expect(plan.conflictGroups.count == 1)
+    }
+
+    /// A loose upgrade that targets the canonical name of a file already sitting
+    /// organized in its folder must be flagged (the resident file emits no move
+    /// op, so the collision used to go undetected and the upgrade was silently
+    /// skipped on Apply) — and the resolver can let both coexist as versions. (#3)
+    @Test func collisionWithInPlaceFileIsFlagged() {
+        let root = makeTempRoot(); defer { try? fm.removeItem(at: root) }
+        touch(root.appendingPathComponent("The Thing (1982)/The Thing (1982).mkv"))
+        touch(root.appendingPathComponent("The.Thing.1982.2160p.UHD.BluRay.mkv"))
+
+        let plan = PlanBuilder.plan(root: root)
+        #expect(plan.conflicts.count == 2)
+        #expect(plan.conflictGroups.count == 1)
+
+        let resolved = PlanBuilder.resolve(plan, suffixes: QualityTag.distinctLabels(for: plan.conflictGroups[0]))
+        #expect(resolved.conflicts.isEmpty)
+    }
+
     /// Two versions of the same movie collide on one destination; labelling them
     /// clears the conflict and yields two distinct files in one shared folder.
     /// (Sharing a title+year, the two loose copies are grouped into one node.)
