@@ -167,7 +167,15 @@ final class AppModel {
         if r.trashedCount > 0 { parts.append("Trashed \(r.trashedCount)") }
         if r.conflictCount > 0 { parts.append("Skipped \(r.conflictCount)") }
         if r.errorCount > 0 { parts.append("Errors \(r.errorCount)") }
-        return parts.joined(separator: " · ")
+        var summary = parts.joined(separator: " · ")
+        // Surface the actual reasons behind any skips/errors — the counts alone
+        // don't tell the user *what* failed. Capped so the alert stays readable.
+        if !r.messages.isEmpty {
+            let shown = r.messages.prefix(6).joined(separator: "\n")
+            let more = r.messages.count > 6 ? "\n…and \(r.messages.count - 6) more" : ""
+            summary += "\n\n" + shown + more
+        }
+        return summary
     }
 
     // MARK: Persistence

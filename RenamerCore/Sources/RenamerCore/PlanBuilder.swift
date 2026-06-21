@@ -364,20 +364,43 @@ public enum PlanBuilder {
     /// filename only — the containing folder is unchanged, so multiple versions
     /// share one `Title (Year)/` folder (Plex/Jellyfin treat them as versions).
     static func computeDestination(_ unit: RenameUnit, title: String, year: String, root: URL) -> URL {
-        let tag = unit.disambiguationSuffix
-            .replacingOccurrences(of: "/", with: "-")
-            .replacingOccurrences(of: ":", with: "-")
-            .trimmingCharacters(in: .whitespaces)
+        // Titles, years, and version labels can be edited freely in the UI, so a
+        // stray `/`, `:`, or a bare `..` must never escape the chosen root or
+        // split a name across directories. Sanitise every user-entered piece
+        // before it becomes a path component.
+        let tag = sanitizeSeparators(unit.disambiguationSuffix)
         let suffix = tag.isEmpty ? "" : " - \(tag)"
+        let safeTitle = pathComponentSafe(title, fallback: "Untitled")
         if let code = unit.episodeCode, let season = unit.season {
-            return root.appendingPathComponent(title)
+            return root.appendingPathComponent(safeTitle)
                 .appendingPathComponent("Season \(season)")
-                .appendingPathComponent("\(title) \(code)\(suffix)\(unit.languageSuffix)\(unit.ext)")
+                .appendingPathComponent("\(safeTitle) \(code)\(suffix)\(unit.languageSuffix)\(unit.ext)")
         } else {
-            let full = "\(title) (\(year))"
+            // A cleared year drops the empty `()` rather than emitting `Title ()`.
+            let safeYear = sanitizeSeparators(year)
+            let full = safeYear.isEmpty ? safeTitle : "\(safeTitle) (\(safeYear))"
             return root.appendingPathComponent(full)
                 .appendingPathComponent("\(full)\(suffix)\(unit.languageSuffix)\(unit.ext)")
         }
+    }
+
+    /// Replace the characters that would split or redirect a path component
+    /// (`/`, `\`, `:`) with `-` and trim surrounding whitespace. Leaves all other
+    /// content untouched, so ordinary titles pass through byte-for-byte.
+    static func sanitizeSeparators(_ s: String) -> String {
+        s.replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: "\\", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+            .trimmingCharacters(in: .whitespaces)
+    }
+
+    /// A user-entered title made safe as a single path component: separators
+    /// stripped, and an empty or dot-only name (`""`, `"."`, `".."`) — which
+    /// would otherwise vanish or resolve to a parent directory — replaced with
+    /// `fallback`.
+    static func pathComponentSafe(_ s: String, fallback: String) -> String {
+        let c = sanitizeSeparators(s)
+        return (c.isEmpty || c.allSatisfy { $0 == "." }) ? fallback : c
     }
 
     /// Split a movie title `"Name (YYYY)"` into its name and year parts.
