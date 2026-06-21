@@ -119,6 +119,31 @@ struct SafetyTests {
         #expect(Scanner.isSymlink(root.appendingPathComponent("linked")))      // link itself not removed
     }
 
+    /// The root-level symlink guard fires for FILE and BROKEN symlinks too, not
+    /// just directory symlinks — it keys on isSymlink (checked before isDirectory),
+    /// so a regression narrowing it to "isSymlink && isDirectory" would re-expose
+    /// a file-symlink-to-.mkv to relocation. Locks the guard's full reach.
+    @Test func buildSkipsRootLevelFileAndBrokenSymlinks() throws {
+        let root = makeTempRoot(); defer { try? fm.removeItem(at: root) }
+        let outside = makeTempRoot(); defer { try? fm.removeItem(at: outside) }
+        let realMkv = outside.appendingPathComponent("Stranger.S01E01.1080p.mkv")
+        touch(realMkv)
+        // (a) a file symlink with a parseable .mkv name → an out-of-tree real file.
+        try fm.createSymbolicLink(at: root.appendingPathComponent("Linked.S02E02.1080p.mkv"),
+                                  withDestinationURL: realMkv)
+        // (b) a broken symlink with a parseable .mkv name.
+        try fm.createSymbolicLink(at: root.appendingPathComponent("Broken.S03E03.1080p.mkv"),
+                                  withDestinationURL: outside.appendingPathComponent("nope.mkv"))
+
+        let plan = PlanBuilder.plan(root: root)
+        for name in ["Linked.S02E02.1080p.mkv", "Broken.S03E03.1080p.mkv"] {
+            #expect(node(plan.nodes, name)?.status == .skip)
+            #expect(node(plan.nodes, name)?.operations.isEmpty == true)
+        }
+        _ = Executor.apply(plan)
+        #expect(fm.fileExists(atPath: realMkv.path))   // out-of-tree target untouched
+    }
+
     /// scanContents must not follow symlinked directories: a self-referential
     /// link can't loop, and an out-of-tree link's contents aren't pulled in.
     @Test func scanContentsSkipsSymlinkedDirectories() throws {

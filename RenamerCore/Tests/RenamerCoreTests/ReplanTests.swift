@@ -103,6 +103,36 @@ struct ReplanTests {
         #expect(!hasCleanup(reverted))   // op isn't frozen — it follows the title
     }
 
+    /// The movie branch of the cleanup re-evaluation: a folder already named
+    /// `Title (Year)` schedules no cleanup at build, but editing the year orphans
+    /// it (cleanup scheduled), reverting drops it, and clearing the year targets a
+    /// bare `Title/` folder — exercising destinationFolder's `Title (Year)`
+    /// reconstruction and the cleared-year path. (#4)
+    @Test func movieYearEditReevaluatesEmptySourceCleanup() {
+        let root = makeTempRoot(); defer { try? fm.removeItem(at: root) }
+        let folder = root.appendingPathComponent("Inception (2010)")
+        touch(folder.appendingPathComponent("Inception.2010.1080p.BluRay.mkv"))
+        func cleansFolder(_ np: NodePlan) -> Bool {
+            np.operations.contains {
+                if case let .removeEmptyDirectory(d) = $0 {
+                    return d.standardizedFileURL == folder.standardizedFileURL
+                }
+                return false
+            }
+        }
+        let n = node(PlanBuilder.plan(root: root).nodes, "Inception (2010)")!
+        #expect(!cleansFolder(n))   // folder already IS the destination
+
+        let bumped = PlanBuilder.replan(n, title: "Inception", year: "2011", root: root)
+        #expect(bumped.previewPairs.map(\.new) == ["Inception (2011)/Inception (2011).mkv"])
+        #expect(cleansFolder(bumped))
+
+        #expect(!cleansFolder(PlanBuilder.replan(bumped, title: "Inception", year: "2010", root: root)))
+        let cleared = PlanBuilder.replan(bumped, title: "Inception", year: "", root: root)
+        #expect(cleared.previewPairs.map(\.new) == ["Inception/Inception.mkv"])
+        #expect(cleansFolder(cleared))
+    }
+
     /// Editing one of two colliding movie *folders* to a unique title clears the
     /// conflict. (Two loose copies of one title now share a single node, so a
     /// per-node title edit can't split them — that's the version-label resolver's
