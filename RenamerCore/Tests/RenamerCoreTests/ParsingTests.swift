@@ -151,6 +151,21 @@ struct ParsingTests {
         #expect(TitleFormatter.titleCase("don\u{2019}t look up") == "Don\u{2019}t Look Up")
     }
 
+    /// Swift-side divergence from the oracle: an accented word stays one token
+    /// (the ASCII-only word regex used to split on the accent and re-capitalise
+    /// the tail — "amélie" → "AméLie"). Covers precomposed (NFC) and decomposed
+    /// (NFD) forms, an accent mid-word and word-final, and a multi-word title.
+    @Test func titleAccentedWordsStayWhole() {
+        #expect(TitleFormatter.titleCase("amélie") == "Amélie")
+        #expect(TitleFormatter.titleCase("les misérables") == "Les Misérables")
+        #expect(TitleFormatter.titleCase("pokémon detective pikachu") == "Pokémon Detective Pikachu")
+        #expect(TitleFormatter.titleCase("café society") == "Café Society")
+        // NFD: "amelie" with a combining acute (U+0301) after the first "e" —
+        // the mark must stay attached to its base letter, not split the word.
+        // (Swift String == uses canonical equivalence, so this equals "Amélie".)
+        #expect(TitleFormatter.titleCase("ame\u{0301}lie") == "Amélie")
+    }
+
     /// An acronym possessive keeps the mapped acronym AND a lowercase tail.
     /// Guards against widening the word regex (which would merge "BBC's" into one
     /// token, miss the "BBC" key, and yield "Bbc's").

@@ -18,9 +18,13 @@ enum Patterns {
         pattern: #"(?<!\d)(19\d{2}|20\d{2})(?!\d)"#
     )
 
-    /// A run of ASCII letters (one "word" for title casing).
+    /// A run of letters (one "word" for title casing). Unicode-aware so an
+    /// accented word stays a single token — an ASCII-only class would split
+    /// "Amélie" into "Am"/"lie" and capitalise each ("AméLie"). Combining marks
+    /// (`\p{M}`) are included so decomposed (NFD) forms like "e"+◌́ stay attached.
+    /// This intentionally diverges from the Python oracle, which has the ASCII bug.
     static let word = try! NSRegularExpression(
-        pattern: #"[A-Za-z]+"#
+        pattern: #"[\p{L}\p{M}]+"#
     )
 
     /// The "AKA" separator in movie titles (keep the right-hand side).
