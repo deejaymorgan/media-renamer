@@ -1,6 +1,6 @@
 # M8 — Packaging for distribution (handoff agenda)
 
-**Status:** WIP / not started · **Updated:** 2026-06-21 · **Branch:** `main`
+**Status:** Solo prep DONE — awaiting Apple credentials · **Updated:** 2026-06-21 · **Branch:** `main`
 
 Distribution **is in scope** (decided 2026-06-21): the goal is a notarised,
 double-clickable `.app` that runs outside Xcode, not just a personal ⌘R tool.
@@ -18,29 +18,60 @@ M8 is build/release plumbing, not app logic.
 - Working tree clean.
 
 ## M8 gap list (grounded in the actual project, 2026-06-21)
-| Gap | Current state | Needed |
-|-----|---------------|--------|
-| App icon | `Assets.xcassets/AppIcon.appiconset` has the size slots but **no PNG art** | A 1024px icon rendered into the iconset |
-| Hardened Runtime | **OFF** (absent from `project.pbxproj`) | `ENABLE_HARDENED_RUNTIME = YES` — required for notarisation |
-| Signing identity | `CODE_SIGN_STYLE = Automatic`, **no `DEVELOPMENT_TEAM` / Developer ID** | Developer ID Application cert + Team ID |
-| LICENSE | none at repo root | Add one (MIT is the default unless decided otherwise) |
-| Sandbox | `ENABLE_APP_SANDBOX = NO` | Fine for Developer-ID distribution *outside* the App Store; leave off |
-| Bundle ID | `com.djmorgan.MediaRenamer` ✓ | — |
+| Gap | State | Notes |
+|-----|-------|-------|
+| App icon | ✅ DONE (placeholder) | 7 PNGs (16–1024px) rendered into the iconset; **placeholder art** — replace before 1.0 |
+| Hardened Runtime | ✅ DONE | `ENABLE_HARDENED_RUNTIME = YES` in both Debug + Release target configs |
+| Entitlements | ✅ DONE | `MediaRenamer.entitlements` (intentionally empty; sandbox off, no exceptions needed) + `CODE_SIGN_ENTITLEMENTS` wired in both configs |
+| LICENSE | ✅ DONE | MIT, "Daniel Morgan", 2026, at repo root |
+| Notarise script | ✅ DONE | `scripts/notarize.sh` — archive→export→notarytool→staple, with a release checklist |
+| Signing identity | ⛔ NEEDS YOU | `CODE_SIGN_STYLE = Automatic`, **no `DEVELOPMENT_TEAM` / Developer ID** — supply Team ID + cert |
+| Sandbox | ✅ left OFF | Correct for Developer-ID distribution *outside* the App Store |
+| Bundle ID | ✅ `com.djmorgan.MediaRenamer` | — |
 
 ## Plan
-**Solo-doable (no credentials needed) — safe to do first:**
-1. Add `LICENSE` at repo root (confirm license choice; MIT default).
-2. Enable Hardened Runtime (`ENABLE_HARDENED_RUNTIME = YES`) + add a
-   `MediaRenamer.entitlements` file (sandbox stays off; add only what's needed).
-3. Write `scripts/notarize.sh` (archive → export Developer ID → `notarytool
-   submit --wait` → `stapler staple`) + a short release checklist.
-4. Optional: generate a simple placeholder app icon so the iconset isn't empty.
+**Solo-doable (no credentials needed) — ✅ DONE this session:**
+1. ✅ `LICENSE` at repo root — MIT, Daniel Morgan.
+2. ✅ Hardened Runtime on (both configs) + `MediaRenamer/MediaRenamer/MediaRenamer.entitlements`
+   (empty dict — a non-sandboxed Developer-ID app doing FileManager moves/trash +
+   NSOpenPanel needs no exceptions). `CODE_SIGN_ENTITLEMENTS` wired in both configs.
+   Also flipped the leftover `ENABLE_USER_SELECTED_FILES = readonly` → `NO` so no
+   stray sandbox entitlement leaks into the (non-sandboxed) build.
+3. ✅ `scripts/notarize.sh` (archive → export Developer ID → `notarytool submit
+   --wait` → `stapler staple` → verify) with `TEAM_ID` / `SIGNING_IDENTITY` /
+   `NOTARY_PROFILE` as top variables, a placeholder guard, and a RELEASE checklist
+   in the header. **Not run** (needs credentials); `bash -n` syntax-clean.
+4. ✅ Placeholder app icon — `scripts/make_icon.swift` (AppKit/CoreGraphics, no
+   deps) renders a film glyph on an indigo→blue squircle into the iconset.
+   **Placeholder — replace with real art before 1.0.**
+5. ✅ Shared the `MediaRenamer` scheme
+   (`…xcodeproj/xcshareddata/xcschemes/MediaRenamer.xcscheme`, Archive→Release) so
+   `notarize.sh`'s `xcodebuild archive -scheme MediaRenamer` is reproducible on a
+   clean clone / another machine / CI — previously the scheme lived only in
+   git-ignored `xcuserdata/`.
 
-**Needs the user (outward-facing / credentials):**
-- Developer ID Application certificate + Team ID in the project.
-- Run the sign-and-notarise step with their Apple credentials
-  (`notarytool` store-credentials / app-specific password).
-- Provide or approve the final icon art.
+Verified after the changes: `swift test --package-path RenamerCore` = **92 tests /
+11 suites green**; Debug **and** Release `xcodebuild … build` = **BUILD SUCCEEDED**;
+`xcodebuild -list` finds the now-shared scheme. Embedded entitlements on the local
+build are just `get-task-allow` (auto-added for local signing; **stripped by the
+`developer-id` export**), so the notarised app carries an empty entitlement set.
+
+A 5-dimension adversarial review (pbxproj, entitlements, notarize.sh, LICENSE,
+icon) found **zero blockers**. The shared-scheme gap above was its one verified
+warning (now fixed); `codesign --verify` dropped the Apple-discouraged `--deep`.
+
+### Optional future cleanup (inert, not blocking)
+- `REGISTER_APP_GROUPS = YES` is a leftover Xcode-template setting in both target
+  configs. It injects nothing (no app-groups array; confirmed by the clean build)
+  and is harmless, so it was left as-is. Can be removed for a more minimal,
+  intention-revealing non-sandboxed config.
+
+**Needs you (outward-facing / credentials) — leave for the user:**
+- Set `DEVELOPMENT_TEAM` (Team ID) + a Developer ID Application certificate.
+- Fill `TEAM_ID` / `SIGNING_IDENTITY` in `scripts/notarize.sh` (or export them).
+- One-time: `xcrun notarytool store-credentials` (app-specific password).
+- Run `./scripts/notarize.sh` with your Apple credentials.
+- Provide or approve the final icon art (replaces the placeholder).
 
 ## Open decisions
 - **License:** MIT (recommended default) vs other.
