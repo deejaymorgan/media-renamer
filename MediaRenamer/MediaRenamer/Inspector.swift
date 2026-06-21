@@ -111,6 +111,7 @@ struct InspectorView: View {
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .clearAcronymBarBlur(active: !model.acronymWords.isEmpty)
     }
 }
 
@@ -160,6 +161,7 @@ struct SeasonInspectorView: View {
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .clearAcronymBarBlur(active: !model.acronymWords.isEmpty)
     }
 }
 
@@ -225,6 +227,7 @@ struct AllModeView: View {
             }
             .padding(20)
         }
+        .clearAcronymBarBlur(active: !model.acronymWords.isEmpty)
         .onAppear { expanded = Set(items.map(\.source)) }
     }
 
@@ -434,5 +437,24 @@ struct ConflictResolveView: View {
     private var canResolve: Bool {
         let trimmed = group.map { (labels[$0] ?? "").trimmingCharacters(in: .whitespaces) }
         return !trimmed.contains("") && Set(trimmed).count == trimmed.count
+    }
+}
+
+// MARK: - Detail top inset
+
+extension View {
+    /// On macOS 26 a toolbar-bearing NavigationSplitView lets the detail's scroll
+    /// content slide up under the acronym bar, whose translucent material blurs
+    /// the first row (the inspector's headline title) into a washed-out strip.
+    /// (The sidebar's `List` insets itself, so it's unaffected.) When that bar is
+    /// showing, inset the scroll content below it so the title stays crisp.
+    /// No-op when the bar is hidden, and pre-macOS 26 where no blur occurs.
+    @ViewBuilder
+    func clearAcronymBarBlur(active: Bool) -> some View {
+        if active, #available(macOS 26.0, *) {
+            contentMargins(.top, 34, for: .scrollContent)
+        } else {
+            self
+        }
     }
 }
