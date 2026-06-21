@@ -134,6 +134,44 @@ struct ParsingTests {
                 == "From Dusk Till Dawn")
     }
 
+    /// Contractions and possessives keep their lowercase tail — the apostrophe
+    /// no longer splits the word into a re-capitalised fragment (the reported
+    /// "I Don'T Feel..." bug). Covers a tail at the title edge ("She's") and a
+    /// trailing apostrophe ("Cowboys'").
+    @Test func titleContractionsAndPossessives() {
+        #expect(TitleFormatter.titleCase("I Don't Feel at Home in This World Anymore")
+                == "I Don't Feel at Home in This World Anymore")
+        #expect(TitleFormatter.titleCase("ocean's eleven") == "Ocean's Eleven")
+        #expect(TitleFormatter.titleCase("she's all that") == "She's All That")
+        #expect(TitleFormatter.titleCase("cowboys' hat") == "Cowboys' Hat")
+    }
+
+    /// A curly apostrophe (U+2019) is handled identically to the straight one.
+    @Test func titleContractionCurlyApostrophe() {
+        #expect(TitleFormatter.titleCase("don\u{2019}t look up") == "Don\u{2019}t Look Up")
+    }
+
+    /// An acronym possessive keeps the mapped acronym AND a lowercase tail.
+    /// Guards against widening the word regex (which would merge "BBC's" into one
+    /// token, miss the "BBC" key, and yield "Bbc's").
+    @Test func titleAcronymPossessive() {
+        #expect(TitleFormatter.titleCase("bbc's documentary", acronyms: ["BBC": "BBC"])
+                == "BBC's Documentary")
+    }
+
+    /// A leading apostrophe particle is NOT a contraction tail (no letter before
+    /// the apostrophe), so it stays capitalised.
+    @Test func titleLeadingApostropheParticle() {
+        #expect(TitleFormatter.titleCase("'tis the season") == "'Tis the Season")
+    }
+
+    /// Documented, accepted limitation: leading-particle names lose their
+    /// internal capital because `capitalizeWord` (str.capitalize semantics)
+    /// lowercases the tail. Pinned so the regression stays intentional.
+    @Test func titleApostropheNameLimitation() {
+        #expect(TitleFormatter.titleCase("o'brien") == "O'brien")
+    }
+
     // MARK: - preservedStopwords()
 
     @Test func stopwordsFlagsMidCapital() {

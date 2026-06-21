@@ -7,6 +7,12 @@ public enum TitleFormatter {
     /// Capitalise the first letter of each word, preserving known acronyms.
     /// Short connector words (articles, prepositions, conjunctions) stay
     /// lowercase when they sit between the first and last word of the title.
+    /// A contraction or possessive tail keeps its lowercase letter
+    /// (`Don't`, `Ocean's`, `BBC's`) — the word regex splits on the apostrophe,
+    /// so the tail is re-joined by `isContraction` rather than re-capitalised.
+    /// The one casualty is leading-particle names: `O'Brien` becomes `O'brien`,
+    /// because `Str.capitalizeWord` (Python `str.capitalize` semantics)
+    /// lowercases everything after the first letter regardless.
     ///
     /// `acronyms` maps an UPPERCASED word to its desired rendering
     /// (e.g. `["NASA": "NASA"]`); resolving that map is a UI concern.
@@ -22,16 +28,37 @@ public enum TitleFormatter {
             out += text[pos..<r.lowerBound]          // separator before this word
             let word = String(text[r])
             let isEdge = (i == 0 || i == lastIdx)
-            out += capWord(word, isEdge: isEdge, acronyms: acronyms)
+            let cont = isContraction(in: text, tokenStart: r.lowerBound)
+            out += capWord(word, isEdge: isEdge, isContinuation: cont, acronyms: acronyms)
             pos = r.upperBound
         }
         out += text[pos...]                          // trailing separator
         return out
     }
 
+    /// True when the token starting at `tokenStart` is the tail of a contraction
+    /// or possessive — immediately preceded by an apostrophe that itself follows
+    /// a letter (`Don['t]`, `Ocean['s]`). Such a fragment is a word continuation,
+    /// not a new word, so it must not be re-capitalised. Both straight (U+0027)
+    /// and curly (U+2019) apostrophes count. The lookback walks Unicode
+    /// `Character`s, so it stays correct even though the word regex is ASCII-only
+    /// (e.g. the letter before the apostrophe in `Beyoncé's`).
+    private static func isContraction(in text: String, tokenStart: String.Index) -> Bool {
+        guard tokenStart > text.startIndex else { return false }
+        let apIdx = text.index(before: tokenStart)
+        guard text[apIdx] == "'" || text[apIdx] == "\u{2019}" else { return false }
+        guard apIdx > text.startIndex else { return false }
+        return text[text.index(before: apIdx)].isLetter
+    }
+
     private static func capWord(
-        _ word: String, isEdge: Bool, acronyms: [String: String]
+        _ word: String, isEdge: Bool, isContinuation: Bool, acronyms: [String: String]
     ) -> String {
+        // A contraction/possessive tail (`Don['t]`, `BBC['s]`) is a word
+        // continuation, not a standalone word: lowercase it, and never treat it
+        // as an acronym or stopword. Checked before the acronym lookup so the
+        // "s" in "BBC's" is not surfaced as its own acronym chip.
+        if isContinuation { return word.lowercased() }
         let upper = word.uppercased()
         if let mapped = acronyms[upper] { return mapped }
         if isEdge { return Str.capitalizeWord(word) }
