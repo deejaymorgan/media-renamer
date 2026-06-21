@@ -86,7 +86,7 @@ struct SummaryChips: View {
     var body: some View {
         if let plan = model.plan {
             let g = PlanGroups(plan)
-            HStack(spacing: 12) {
+            HStack(spacing: 16) {
                 chip("TV", g.tvRename.count, .blue)
                 chip("Movies", g.movieRename.count, .purple)
                 chip("Unchanged", g.unchanged.count, .secondary)
@@ -94,13 +94,18 @@ struct SummaryChips: View {
                 if !plan.conflicts.isEmpty { chip("Conflicts", plan.conflicts.count, .red) }
                 if g.junkCount > 0 { chip("Junk", g.junkCount, .secondary) }
             }
+            .padding(.trailing, 8)
         }
     }
 
     private func chip(_ label: String, _ count: Int, _ color: Color) -> some View {
-        HStack(spacing: 3) {
-            Text("\(count)").bold().foregroundStyle(color)
-            Text(label).foregroundStyle(.secondary)
+        HStack(spacing: 4) {
+            Text("\(count)")
+                .bold()
+                .monospacedDigit()
+                .foregroundStyle(color)
+            Text(label)
+                .foregroundStyle(.secondary)
         }
         .font(.caption)
     }
