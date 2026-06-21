@@ -1,14 +1,17 @@
 # Media Renamer
 
+> **Note for human readers:** this file is build/architecture guidance for AI
+> coding agents (e.g. Claude Code) working in this repo. It is *not* needed to
+> use or build the app — see [`README.md`](README.md) for that.
+
 Native **macOS (Swift + SwiftUI)** app that restructures a folder of `.mkv` files
 (and subtitle sidecars) into a Plex/Jellyfin-friendly tree:
 - TV: `Show Name/Season N/Show Name S##E##.mkv`
 - Movie: `Movie Name (Year)/Movie Name (Year).mkv`
 
-A ground-up Swift rebuild of an earlier Python CLI. The Python project at
-`~/Dev/tv-show-renamer` is **only the behavioural spec + test oracle** — no
-Python ships here, and the app never calls it. Swift tests mirror the Python
-`tests/` as the parity contract.
+A ground-up Swift rebuild of an earlier Python CLI. That earlier project is
+**only the behavioural spec + test oracle** — no Python ships here, and the app
+never calls it. Swift tests mirror the Python `tests/` as the parity contract.
 
 ## Architecture
 - **`RenamerCore/`** — the engine: a pure Swift Package (Foundation only, no UI,

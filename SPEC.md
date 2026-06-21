@@ -1,8 +1,7 @@
 # Media Renamer — Native macOS App Specification
 
 **Status:** MVP delivered, extending · **Updated:** 2026-05-31 · **Behavioural
-baseline:** the original Python engine at `~/Dev/tv-show-renamer` (`renamer.py` +
-`data.py`)
+baseline:** an earlier (unpublished) Python engine (`renamer.py` + `data.py`)
 
 A native macOS app that restructures a folder of `.mkv` files (and subtitle
 sidecars) into a Plex/Jellyfin-friendly tree. A ground-up rebuild of an existing
@@ -23,7 +22,7 @@ One Swift engine, one SwiftUI front-end, fully native, macOS-only.
   tested via `swift test` (no Xcode required to test the engine).
 - **App (`MediaRenamer`):** a SwiftUI macOS app that depends on `RenamerCore`
   and renders/drives it. The engine is never re-implemented outside Swift.
-- **Heritage:** the Python CLI (`~/Dev/tv-show-renamer`) defines the *rules*
+- **Heritage:** the earlier (unpublished) Python CLI defines the *rules*
   (formatting syntax, year/episode parsing, duplicate checking, sidecar/junk
   handling). Its `tests/` are the parity oracle the Swift tests mirror. No Python
   code ships here.
@@ -153,7 +152,7 @@ behind a confirmation dialog.
 
 ## 5. The Rules (ported from the Python baseline)
 
-Verbatim behaviour from `~/Dev/tv-show-renamer`, pinned by parity tests:
+Verbatim behaviour from the earlier Python engine, pinned by parity tests:
 
 - **Classification:** episode code → TV; else release year → movie; else skipped.
 - **Episode codes:** `S01E01`, `S01E01E02`, `S01E01-E02`, 4-digit seasons
