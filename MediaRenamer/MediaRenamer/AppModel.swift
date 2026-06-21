@@ -120,11 +120,16 @@ final class AppModel {
 
     /// Apply a title/year edit to one item and re-detect conflicts.
     func replan(itemSource: URL, title: String, year: String) {
-        guard let plan, let node = plan.nodes.first(where: { $0.source == itemSource })
+        guard let plan,
+              let node = plan.nodes.first(where: { $0.source == itemSource }),
+              node.editTitle != title || node.editYear != year
         else { return }
-        // Remember the edit so it survives later rebuilds (e.g. an acronym toggle).
+        // Record only a REAL change (after the unchanged-guard) so it survives
+        // later rebuilds (e.g. an acronym toggle). Recording before the guard
+        // would let a mere inspector appearance — EditFields.onAppear assigns the
+        // current title, firing onChange — pin the node and silently veto acronym
+        // toggles for it.
         titleEdits[itemSource] = (title, year)
-        guard node.editTitle != title || node.editYear != year else { return }
         self.plan = PlanBuilder.replan(plan, itemSource: itemSource, title: title, year: year)
     }
 
