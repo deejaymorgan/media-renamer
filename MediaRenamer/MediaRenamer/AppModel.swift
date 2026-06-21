@@ -33,6 +33,10 @@ final class AppModel {
     /// Per-source version labels chosen in the resolve panel, keyed by the unit's
     /// source URL. Re-applied after every rebuild so resolutions survive edits.
     private(set) var disambiguation: [URL: String] = [:]
+    /// Per-node title/year edits, keyed by the node's source URL. Re-applied after
+    /// every rebuild so a manual edit survives an acronym toggle (which rebuilds
+    /// the whole plan), exactly the way `disambiguation` survives it.
+    private(set) var titleEdits: [URL: (title: String, year: String)] = [:]
     /// Outcome of the most recent Apply.
     private(set) var lastResult: ApplyResult?
 
@@ -51,6 +55,7 @@ final class AppModel {
         folderURL = url
         keptJunk = []
         disambiguation = [:]
+        titleEdits = [:]
         acronymWords = PlanBuilder.allCapsWords(root: url)
         selection = nil
         rebuildPlan()
@@ -99,6 +104,12 @@ final class AppModel {
         guard let folderURL else { return }
         var p = PlanBuilder.plan(root: folderURL, acronyms: acronymMap)
         if !disambiguation.isEmpty { p = PlanBuilder.resolve(p, suffixes: disambiguation) }
+        // Re-apply manual title/year edits so they survive an acronym-driven
+        // rebuild (each edit targets its own node; conflicts are re-detected by
+        // the last replan, so order doesn't matter).
+        for (src, edit) in titleEdits {
+            p = PlanBuilder.replan(p, itemSource: src, title: edit.title, year: edit.year)
+        }
         plan = p
         if selection == nil {
             selection = p.nodes.first(where: { $0.status == .rename }).map { .item($0.source) } ?? .all
@@ -109,10 +120,11 @@ final class AppModel {
 
     /// Apply a title/year edit to one item and re-detect conflicts.
     func replan(itemSource: URL, title: String, year: String) {
-        guard let plan,
-              let node = plan.nodes.first(where: { $0.source == itemSource }),
-              node.editTitle != title || node.editYear != year
+        guard let plan, let node = plan.nodes.first(where: { $0.source == itemSource })
         else { return }
+        // Remember the edit so it survives later rebuilds (e.g. an acronym toggle).
+        titleEdits[itemSource] = (title, year)
+        guard node.editTitle != title || node.editYear != year else { return }
         self.plan = PlanBuilder.replan(plan, itemSource: itemSource, title: title, year: year)
     }
 
