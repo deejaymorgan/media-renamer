@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Media Renamer — Quick Start Guide</title>
+<style>
+  :root{
+    --bg:#ffffff; --ink:#1c2230; --muted:#5a6573; --faint:#8a93a3;
+    --line:#e6e9ef; --line-strong:#d4d9e2;
+    --accent:#2f6bed; --accent-ink:#1d4fb8; --accent-wash:#eef3fe;
+    --tv:#3d7dd6; --movie:#a86bd6; --junk:#d08a2c; --conflict:#d6504b; --ok:#2e9e6b;
+    --frame:#0e1014; --code:#f4f6fa; --code-ink:#243;
+    --maxtext:64ch;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .page{max-width:920px; margin:0 auto; padding:48px 28px 80px}
+  /* keep reading lines short, even though figures go full width */
+  p,li,.lead,.note p,figcaption,dd,dt,.callout p{max-width:var(--maxtext)}
+  h1,h2,h3{line-height:1.25; letter-spacing:-.01em}
+  h1{font-size:2.1rem; margin:0 0 6px}
+  h2{font-size:1.4rem; margin:2.4em 0 .5em}
+  h3{font-size:1.08rem; margin:1.8em 0 .4em}
+  a{color:var(--accent-ink)}
+  code,kbd,.mono{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace}
+  code{background:var(--code); padding:.12em .4em; border-radius:5px; font-size:.86em}
+  kbd{background:#fff;border:1px solid var(--line-strong);border-bottom-width:2px;border-radius:6px;
+      padding:.05em .45em;font-size:.82em;box-shadow:0 1px 0 rgba(0,0,0,.02)}
+
+  /* ---- masthead ---- */
+  header.mast{border-bottom:1px solid var(--line); padding-bottom:22px; margin-bottom:8px}
+  .eyebrow{font-size:.78rem; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--accent)}
+  .lead{font-size:1.12rem; color:var(--muted); margin:.6em 0 0}
+  .meta{margin-top:14px; font-size:.82rem; color:var(--muted)}
+  .meta b{color:var(--muted); font-weight:600}
+  .patterns{display:flex; flex-wrap:wrap; gap:10px; margin:18px 0 0}
+  .pat{flex:1 1 280px; border:1px solid var(--line); border-radius:10px; padding:12px 14px; background:#fcfdff}
+  .pat .k{font-size:.74rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+  .pat .v{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:.84rem; margin-top:4px; color:var(--ink); overflow-wrap:anywhere}
+
+  /* ---- callouts ---- */
+  .callout{border:1px solid var(--line); border-left:4px solid var(--accent);
+           background:var(--accent-wash); border-radius:8px; padding:14px 16px; margin:18px 0}
+  .callout.safe{border-left-color:var(--ok); background:#effaf3}
+  .callout.warn{border-left-color:var(--junk); background:#fdf6ea}
+  .callout .h{font-weight:700; margin:0 0 4px; font-size:.95rem}
+  .callout p{margin:.2em 0}
+
+  /* ---- the 30s list ---- */
+  ol.tldr{counter-reset:s; list-style:none; padding:0; margin:18px 0 0}
+  ol.tldr li{counter-increment:s; position:relative; padding:6px 0 6px 42px; max-width:var(--maxtext)}
+  ol.tldr li::before{content:counter(s); position:absolute; left:0; top:5px;
+     width:26px;height:26px;border-radius:50%; background:var(--accent); color:#fff;
+     font-size:.8rem;font-weight:700; display:grid; place-items:center}
+
+  /* ---- steps ---- */
+  .step{margin-top:2.6em}
+  .step > h2{display:flex; align-items:center; gap:12px; margin-top:0}
+  .badge{flex:none; width:30px;height:30px;border-radius:50%; background:var(--ink); color:#fff;
+     font-size:.95rem;font-weight:700; display:grid; place-items:center}
+
+  /* ---- figures (screenshots) ---- */
+  figure{margin:18px 0 6px}
+  .shot{background:var(--frame); border:1px solid var(--line-strong); border-radius:14px;
+        overflow:hidden; box-shadow:0 8px 30px -12px rgba(20,30,60,.32), 0 2px 6px -2px rgba(20,30,60,.16)}
+  .shot img{display:block; width:100%; height:auto}
+  figcaption{font-size:.86rem; color:var(--muted); margin-top:10px; padding-left:2px}
+  figcaption b{color:var(--ink); font-weight:600}
+
+  /* ---- tables ---- */
+  table{border-collapse:collapse; width:100%; max-width:100%; margin:14px 0; font-size:.92rem}
+  th,td{text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); vertical-align:top}
+  thead th{font-size:.74rem; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); border-bottom:2px solid var(--line-strong)}
+  td .mono{font-size:.84rem}
+  tbody tr:last-child td{border-bottom:none}
+
+  /* tag chips used in prose */
+  .chip{display:inline-block; font-size:.72rem; font-weight:700; padding:.12em .5em; border-radius:999px; vertical-align:.06em}
+  .chip.tv{color:#1c4f8f;background:#e4eefb}
+  .chip.movie{color:#6a3a93;background:#f0e6fa}
+  .chip.junk{color:#8a5710;background:#fbeed6}
+  .chip.dup{color:#9a302c;background:#fbe4e2}
+
+  dl.kv{margin:8px 0}
+  dl.kv dt{font-weight:600; margin-top:12px}
+  dl.kv dd{margin:2px 0 0; color:var(--muted)}
+
+  hr.sec{border:none; border-top:1px solid var(--line); margin:3em 0 0}
+  footer{margin-top:3em; padding-top:18px; border-top:1px solid var(--line); font-size:.84rem; color:var(--muted)}
+
+  /* ---- print / PDF ---- */
+  @media print{
+    @page{ margin:14mm 14mm 16mm }
+    body{font-size:11.5pt}
+    .page{padding:0; max-width:none}
+    a{color:var(--ink); text-decoration:none}
+    .shot{box-shadow:none; border-color:#c7ccd6}
+    figure, table, .callout{break-inside:avoid}
+    h2{break-after:avoid}
+    .shot img{max-height:215mm; width:auto; max-width:100%; margin:0 auto}
+    /* keep the dark screenshot frames and tints in the PDF */
+    *{-webkit-print-color-adjust:exact; print-color-adjust:exact}
+    .pagebreak{break-before:page}
+  }
+  @media (max-width:560px){ .page{padding:32px 18px 60px} h1{font-size:1.7rem} }
+</style>
+</head>
+<body>
+<main class="page">
+
+  <header class="mast">
+    <div class="eyebrow">Media Renamer</div>
+    <h1>Quick Start Guide</h1>
+    <p class="lead">A native macOS app that tidies a messy folder of movie &amp; TV files into the
+      clean, predictable layout that Plex and Jellyfin expect — so your library
+      just works. You preview everything first; nothing changes on disk until you say so.</p>
+    <div class="patterns">
+      <div class="pat"><div class="k">TV episodes become</div><div class="v">Show Name / Season&nbsp;N / Show Name S##E##.mkv</div></div>
+      <div class="pat"><div class="k">Movies become</div><div class="v">Movie Name (Year) / Movie Name (Year).mkv</div></div>
+    </div>
+    <p class="meta"><b>For:</b> anyone organising a download/media folder &nbsp;·&nbsp;
+       <b>Platform:</b> macOS 14 or later &nbsp;·&nbsp; <b>Reading time:</b> ~5 minutes</p>
+  </header>
+
+  <div role="note" class="callout safe">
+    <p class="h">It’s safe to explore</p>
+    <p>Choosing a folder only <em>previews</em> a plan — it reads names, it doesn’t touch your files.
+       The app changes nothing on disk until you click <b>Apply</b> and confirm. Renaming never
+       overwrites an existing file, and anything sent to the Trash can be restored with Finder’s
+       <b>Put&nbsp;Back</b>. Still, the golden rule with any bulk tool: <b>try it on a copy first.</b></p>
+  </div>
+
+  <h2>The 30-second version</h2>
+  <ol class="tldr">
+    <li><b>Choose a folder</b> of video files (and their subtitles).</li>
+    <li><b>Read the preview</b> — every <span class="mono">old&nbsp;→&nbsp;new</span> name, grouped into TV, Movies, Unchanged, and Skipped.</li>
+    <li><b>Adjust if needed</b> — fix a title, keep or un-keep an acronym, choose which junk to bin, label duplicate versions.</li>
+    <li><b>Apply</b> — confirm, and the renames happen (plus junk to the Trash, and empty leftover folders cleaned up).</li>
+  </ol>
+
+  <!-- ============ STEP 1 ============ -->
+  <section class="step pagebreak">
+    <h2><span class="badge">1</span> Open the app &amp; choose a folder</h2>
+    <p>When Media Renamer launches it’s empty and waiting. Click <b>Choose Folder…</b> (the
+       folder button at the top-left) and pick the folder you want to organise — for example a
+       <span class="mono">Downloads/TV</span> folder full of scene-named files. The app scans
+       one level deep: loose files at the top, plus the immediate sub-folders.</p>
+    <figure>
+      <div class="shot"><img src="{{IMG:01-empty}}" alt="The Media Renamer window on first launch, empty, with a film-reel icon and the prompt ‘Choose a folder to preview the rename plan.’"></div>
+      <figcaption>The start screen. Click <b>Choose Folder…</b> to point the app at your media.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ STEP 2 ============ -->
+  <section class="step">
+    <h2><span class="badge">2</span> Read the plan</h2>
+    <p>As soon as you pick a folder you get a complete preview — no changes yet. The
+       <b>sidebar</b> on the left groups everything it found:</p>
+    <ul>
+      <li><span class="chip tv">TV</span> and <span class="chip movie">Movies</span> — the files that will be renamed.</li>
+      <li><b>Unchanged</b> — already named correctly (the app leaves them alone).</li>
+      <li><b>Skipped</b> — it couldn’t recognise an episode code or a year, so it won’t guess.</li>
+    </ul>
+    <p>Select <b>All items</b> at the top to see every entry as a card showing the live rename —
+       the new name in <b>green</b>, with the original filename beneath it. Along the bottom,
+       colour-coded <b>summary chips</b> tally how many items fall into each bucket, and the bar
+       tells you exactly how many files will move and how much junk will go to the Trash.</p>
+    <figure>
+      <div class="shot"><img src="{{IMG:02-plan-all}}" alt="The All-items overview: sidebar grouped into TV, Movies, Unchanged, Skipped; cards showing before-and-after names; an acronym bar across the top; and summary chips along the bottom."></div>
+      <figcaption>The <b>All items</b> overview — the whole plan at a glance. Each card shows the new
+        name (green) above the original. The colour-coded chips along the bottom tally each bucket —
+        here <span class="mono">3 TV · 4 Movies · 1 Unchanged · 1 Skipped · 2 Conflicts · 3 Junk</span>
+        (the red <b>Conflicts</b> chip appears only when duplicates are found).</figcaption>
+    </figure>
+    <div role="note" class="callout">
+      <p class="h">Edit a title or year anytime</p>
+      <p>Every item has editable <b>Title</b> (and, for movies, <b>Year</b>) fields. Type a
+        correction and the plan re-computes instantly — including the destination folder name.
+        Titles are Title-Cased automatically, and hyphens are preserved.</p>
+    </div>
+  </section>
+
+  <!-- ============ STEP 3 ============ -->
+  <section class="step pagebreak">
+    <h2><span class="badge">3</span> TV shows &amp; seasons</h2>
+    <p>A show that spans several seasons appears as a single row that <b>expands into a
+       Season tree</b> — click it to reveal each season, or use <b>Expand all / Collapse all</b>.
+       Selecting the show lets you edit the title once for every season; selecting a single season
+       focuses just its files. Scattered loose episodes of the same show are gathered together
+       automatically, and each season is filed into its own <span class="mono">Season N/</span> folder.</p>
+    <figure>
+      <div class="shot"><img src="{{IMG:03-tv-tree}}" alt="The Expanse expanded in the sidebar into Season 3 and Season 4; the inspector lists resulting files grouped by season, each with its before-and-after name."></div>
+      <figcaption><b>The Expanse</b> expands into Season&nbsp;3 and Season&nbsp;4. The inspector lists
+        the resulting files per season — e.g.
+        <span class="mono">The.Expanse.S03E01.Fight.Or.Flight…</span> →
+        <span class="mono">The Expanse/Season 3/The Expanse S03E01.mkv</span>.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ STEP 4 ============ -->
+  <section class="step">
+    <h2><span class="badge">4</span> Acronyms — keep them shouting, or not</h2>
+    <p>Title-casing would happily turn <span class="mono">FBI</span> into “Fbi”. To prevent that,
+       the app spots all-caps words in your titles and shows them in the <b>acronym bar</b> across the
+       top, each with a <b>keep / Title</b> toggle. The app pre-selects <b>keep</b> for short acronyms
+       (about four letters or fewer) and <b>Title</b> for longer all-caps words — flip either as needed.
+       With <b>keep</b>, <span class="mono">FBI</span> stays <span class="mono">FBI</span>; choose
+       <b>Title</b> for a word that should be capitalised normally. Your choices are remembered for
+       next time.</p>
+    <figure>
+      <div class="shot"><img src="{{IMG:04-acronym}}" alt="The acronym bar at the top showing FBI and WALL each with keep/Title toggles set to keep; the FBI show selected below with its editable title field."></div>
+      <figcaption>The acronym bar detected <span class="mono">FBI</span> and <span class="mono">WALL</span>
+        (from WALL-E) and is keeping both as-is, so the output stays
+        <span class="mono">FBI/Season 4/FBI S04E01.mkv</span>.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ STEP 5 ============ -->
+  <section class="step pagebreak">
+    <h2><span class="badge">5</span> Send the junk to the Trash</h2>
+    <p>Sample clips, cover art, screenshots, “proof” images — the flotsam that ships alongside a
+       download — are flagged as <b>junk</b>. For any item that contains some, the inspector lists each
+       junk file with a checkbox. Checked files go to the macOS <b>Trash</b> when you Apply; un-check
+       anything you’d rather keep. Because it’s the real Trash, you can always
+       <b>Put&nbsp;Back</b> later.</p>
+    <figure>
+      <div class="shot"><img src="{{IMG:05-junk}}" alt="Blade Runner 2049 selected, showing a ‘3 junk’ badge and a Junk → Trash list with checkboxes for cover.jpg, poster.png and sample.mkv."></div>
+      <figcaption><b>Blade Runner 2049</b> renames cleanly while its extras —
+        <span class="mono">cover.jpg</span>, <span class="mono">poster.png</span>,
+        <span class="mono">sample.mkv</span> — are queued for the Trash. Uncheck any to keep it.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ STEP 6 ============ -->
+  <section class="step">
+    <h2><span class="badge">6</span> Two copies of the same thing? Keep both.</h2>
+    <p>If two files would land on the <em>same</em> name — say a 1080p and a 720p rip of one movie —
+       they’re flagged <span class="chip dup">duplicate</span>. Instead of skipping one, the
+       <b>resolver</b> lets you keep them all: it reads each file’s quality and pre-fills a
+       <b>version label</b>, and shows a live preview of the result. Click <b>Resolve</b> and both
+       versions land in one folder as
+       <span class="mono">Title (Year) - 1080p BluRay.mkv</span> and
+       <span class="mono">… - 720p BluRay.mkv</span> — exactly the “versions” layout Plex and
+       Jellyfin understand. Prefer to do nothing? <b>Skip (leave all)</b> leaves them untouched.</p>
+    <figure>
+      <div class="shot"><img src="{{IMG:06-resolver}}" alt="The duplicate resolver for The Thing (1982): two source files each with a pre-filled version label (1080p BluRay, 720p BluRay) and a preview of the resulting filenames, plus Resolve and Skip buttons."></div>
+      <figcaption>The resolver for <b>The Thing (1982)</b>. Each version gets a label, so both are
+        kept side by side instead of one being skipped.</figcaption>
+    </figure>
+    <div role="note" class="callout warn">
+      <p class="h">What happens to unresolved duplicates?</p>
+      <p>If you leave a duplicate unresolved, those colliding files are simply <b>skipped</b> at Apply —
+        nothing is overwritten or lost. You can come back and resolve them on a later run.</p>
+    </div>
+  </section>
+
+  <!-- ============ STEP 7 ============ -->
+  <section class="step pagebreak">
+    <h2><span class="badge">7</span> Apply — the only step that touches disk</h2>
+    <p>Happy with the preview? Click <b>Apply renames</b> in the bottom bar. A confirmation dialog
+       sums up exactly what will happen — how many files move, how many go to the Trash — and reminds
+       you that nothing gets overwritten. Click <b>Apply Renames</b> to go ahead, or <b>Cancel</b> to
+       keep tweaking.</p>
+    <figure>
+      <div class="shot"><img src="{{IMG:07-confirm}}" alt="The Apply confirmation dialog reading ‘Move 12 files and send 3 junk to the Trash. Renaming never overwrites; conflicted items are skipped.’ with Apply Renames and Cancel buttons."></div>
+      <figcaption>The confirmation before anything changes. This is your last checkpoint.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ============ STEP 8 ============ -->
+  <section class="step">
+    <h2><span class="badge">8</span> Done — and safe to run again</h2>
+    <p>Apply does the work — renames, sends the checked junk to the Trash, and tidies up any now-empty
+       source folders — then re-scans and reports a quick summary. After organising, every
+       <em>renameable</em> item shows up as <b>Unchanged</b>; the only thing left is the one file it
+       couldn’t recognise, still parked under <b>Skipped</b>. Running Media Renamer again on an
+       already-tidy folder does nothing, so it’s safe to re-run anytime new files arrive.</p>
+    <figure>
+      <div class="shot"><img src="{{IMG:08-applied}}" alt="The ‘Apply complete’ alert reading ‘Moved 12 · Trashed 3’, with the re-scanned folder behind it now showing every item under Unchanged and ‘All items · 0’."></div>
+      <figcaption><b>Apply complete — Moved 12 · Trashed 3.</b> The renamed files now sit under
+        <b>Unchanged</b> — only the unrecognised <span class="mono">untitled.recording.mkv</span>
+        stays in <b>Skipped</b> — and there’s nothing left to apply.</figcaption>
+    </figure>
+  </section>
+
+  <hr class="sec">
+
+  <!-- ============ REFERENCE ============ -->
+  <section class="pagebreak">
+    <h2>Reference</h2>
+
+    <h3>What the app treats each file as</h3>
+    <table>
+      <thead><tr><th>Kind</th><th>What it is</th><th>What happens</th></tr></thead>
+      <tbody>
+        <tr><td><b>Video</b></td><td class="mono">.mkv</td><td>Renamed into the Plex/Jellyfin layout.</td></tr>
+        <tr><td><b>Subtitle (sidecar)</b></td><td class="mono">.srt .sub .idx .ass .ssa .vtt</td><td>Renamed to sit beside its video, keeping recognised language codes.</td></tr>
+        <tr><td><b>Junk</b></td><td>Anything else, plus names like <span class="mono">sample</span>, <span class="mono">screens</span>, <span class="mono">proof</span>, <span class="mono">thumbs</span></td><td>Offered for the Trash (per-file checkbox).</td></tr>
+        <tr><td><b>Ignored</b></td><td>Library folders <span class="mono">Movies/Music/TV</span> and hidden/metadata files (<span class="mono">.DS_Store</span>, <span class="mono">._*</span>)</td><td>Left completely alone.</td></tr>
+      </tbody>
+    </table>
+
+    <h3>How names are decided</h3>
+    <dl class="kv">
+      <dt>TV vs. Movie</dt>
+      <dd>An episode code (<span class="mono">S01E01</span>, <span class="mono">S01E01-E02</span>, four-digit seasons like <span class="mono">S2024E01</span>…) means TV. Otherwise a release year means a movie. Neither? It’s skipped.</dd>
+      <dt>Finding the year</dt>
+      <dd>A clean <span class="mono">Title (YYYY)</span> wins; otherwise a scene-style <span class="mono">.YYYY.</span> next to a quality tag; otherwise the right-most plausible year — so a year that’s part of the title (e.g. <span class="mono">Blade Runner 2049</span>) isn’t mistaken for a release year.</dd>
+      <dt>Tidying the title</dt>
+      <dd>Dots become spaces, <span class="mono">:</span> becomes “ - ”, hyphens are kept, and the title is Title-Cased with small words (a, the, of…) left lowercase — except the first and last words, which are always capitalised. <span class="mono">AKA</span> titles keep the English side.</dd>
+    </dl>
+
+    <h3>Good to know</h3>
+    <ul>
+      <li><b>Preview is read-only.</b> Only <b>Apply</b> writes to disk, and it always confirms first.</li>
+      <li><b>Nothing is overwritten.</b> If a target name already exists, that item is skipped.</li>
+      <li><b>Junk is recoverable.</b> It goes to the macOS Trash — use Finder’s <b>Put&nbsp;Back</b> to undo.</li>
+      <li><b>Renames don’t have an in-app undo yet,</b> so review the preview before applying. Working on a copy is the safest habit.</li>
+      <li><b>It re-runs cleanly.</b> The app recognises its own output, so re-scanning an organised folder is a no-op.</li>
+    </ul>
+  </section>
+
+  <footer>
+    Media Renamer — Quick Start. Screenshots taken from the macOS app.
+    Generated <span class="mono">{{DATE}}</span>.
+  </footer>
+
+</main>
+</body>
+</html>
