@@ -10,10 +10,6 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if !model.acronymWords.isEmpty {
-                AcronymBar(model: model)
-                Divider()
-            }
             NavigationSplitView {
                 SidebarView(model: model)
                     .navigationSplitViewColumnWidth(min: 250, ideal: 300)
@@ -28,13 +24,13 @@ struct ContentView: View {
                         Label("Choose Folder…", systemImage: "folder")
                     }
                 }
-                ToolbarItemGroup(placement: .primaryAction) {
-                    SummaryChips(model: model)
-                }
             }
 
             BottomBar(model: model) { confirming = true }
         }
+        // The acronym bar is a real title-bar accessory (see AcronymTitlebar), not
+        // a sibling view, so the detail content never underlaps it on macOS 26.
+        .background(AcronymTitlebar(model: model))
         .frame(minWidth: 960, minHeight: 640)
         .fileImporter(
             isPresented: $importing,
@@ -78,36 +74,46 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Summary chips (toolbar, trailing)
+// MARK: - Summary chips (bottom bar, trailing)
 
+/// The per-category plan breakdown, rendered as colour-coded chips that sit in
+/// the bottom bar beside Apply. Only non-empty categories show, so the row stays
+/// tight on small folders.
 struct SummaryChips: View {
     let model: AppModel
 
     var body: some View {
         if let plan = model.plan {
             let g = PlanGroups(plan)
-            HStack(spacing: 16) {
-                chip("TV", g.tvRename.count, .blue)
-                chip("Movies", g.movieRename.count, .purple)
-                chip("Unchanged", g.unchanged.count, .secondary)
-                chip("Skipped", g.skipped.count, .secondary)
-                if !plan.conflicts.isEmpty { chip("Conflicts", plan.conflicts.count, .red) }
-                if g.junkCount > 0 { chip("Junk", g.junkCount, .secondary) }
+            HStack(spacing: 8) {
+                chip("TV", g.tvRename.count, Palette.tv)
+                chip("Movies", g.movieRename.count, Palette.movie)
+                chip("Unchanged", g.unchanged.count, nil)
+                chip("Skipped", g.skipped.count, nil)
+                chip("Conflicts", plan.conflicts.count, Palette.conflict)
+                chip("Junk", g.junkCount, Palette.junk)
             }
-            .padding(.horizontal, 8)
         }
     }
 
-    private func chip(_ label: String, _ count: Int, _ color: Color) -> some View {
-        HStack(spacing: 4) {
-            Text("\(count)")
-                .bold()
-                .monospacedDigit()
-                .foregroundStyle(color)
-            Text(label)
-                .foregroundStyle(.secondary)
+    /// One chip. `tint == nil` is a neutral (muted) category; a non-nil tint
+    /// colours both the count and a faint capsule wash. Hidden when count is 0.
+    @ViewBuilder
+    private func chip(_ label: String, _ count: Int, _ tint: Color?) -> some View {
+        if count > 0 {
+            HStack(spacing: 4) {
+                Text("\(count)")
+                    .bold()
+                    .monospacedDigit()
+                    .foregroundStyle(tint ?? .secondary)
+                Text(label)
+                    .foregroundStyle(.secondary)
+            }
+            .font(.caption)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background((tint ?? .gray).opacity(0.12), in: Capsule())
         }
-        .font(.caption)
     }
 }
 
@@ -126,7 +132,8 @@ struct BottomBar: View {
             .disabled(!hasWork)
 
             Text(statusNote).font(.callout).foregroundStyle(.secondary)
-            Spacer()
+            Spacer(minLength: 16)
+            SummaryChips(model: model)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)

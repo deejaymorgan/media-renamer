@@ -98,7 +98,8 @@ struct ShowRow: View {
                 Image(systemName: "tv").foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(node.displayTitle)
-                        .lineLimit(1).truncationMode(.middle)
+                        .lineLimit(1).truncationMode(.tail)
+                        .help(node.displayTitle)
                     Text(node.seasonSummary)
                         .font(.caption).foregroundStyle(.secondary)
                         .lineLimit(1).truncationMode(.middle)
@@ -131,7 +132,7 @@ struct SeasonRow: View {
             Spacer(minLength: 4)
             if conflicted {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.caption2).foregroundStyle(.red)
+                    .font(.caption2).foregroundStyle(Palette.conflict)
             }
         }
         .padding(.vertical, 1)
@@ -165,6 +166,7 @@ struct SidebarRow: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(node.destinationDirectory)
                     .lineLimit(1).truncationMode(.middle)
+                    .help(node.destinationDirectory)
                 Text(node.originalName)
                     .font(.caption).foregroundStyle(.secondary)
                     .lineLimit(1).truncationMode(.middle)
@@ -200,13 +202,13 @@ struct FlagBadges: View {
     var body: some View {
         HStack(spacing: 4) {
             if node.isConflicted(in: conflicts) {
-                badge(compact ? "dup" : "duplicate", "exclamationmark.triangle.fill", .red)
+                badge(compact ? "dup" : "duplicate", "exclamationmark.triangle.fill", Palette.conflict)
             }
             if !node.junk.isEmpty {
-                badge("\(node.junk.count) junk", "trash", .red)
+                badge("\(node.junk.count) junk", "trash", Palette.junk)
             }
             if !node.verifyTitle.isEmpty {
-                badge(compact ? nil : "verify", "flag", .orange)
+                badge(compact ? nil : "verify", "flag", Palette.verify)
             }
         }
     }
