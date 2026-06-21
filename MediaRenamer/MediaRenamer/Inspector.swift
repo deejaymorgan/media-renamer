@@ -111,7 +111,6 @@ struct InspectorView: View {
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .clearAcronymBarBlur(active: !model.acronymWords.isEmpty)
     }
 }
 
@@ -136,7 +135,7 @@ struct SeasonInspectorView: View {
                     Text("\(node.displayTitle) · Season \(slice.number)").font(.headline)
                     if conflictedHere {
                         Label("duplicate", systemImage: "exclamationmark.triangle.fill")
-                            .labelStyle(.iconOnly).foregroundStyle(.red)
+                            .labelStyle(.iconOnly).foregroundStyle(Palette.conflict)
                     }
                     Spacer()
                 }
@@ -161,7 +160,6 @@ struct SeasonInspectorView: View {
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .clearAcronymBarBlur(active: !model.acronymWords.isEmpty)
     }
 }
 
@@ -227,7 +225,6 @@ struct AllModeView: View {
             }
             .padding(20)
         }
-        .clearAcronymBarBlur(active: !model.acronymWords.isEmpty)
         .onAppear { expanded = Set(items.map(\.source)) }
     }
 
@@ -253,7 +250,8 @@ struct AllCard: View {
                         .foregroundStyle(.secondary)
                     Text(node.displayTitle)
                         .fontWeight(.medium)
-                        .lineLimit(1).truncationMode(.middle)
+                        .lineLimit(1).truncationMode(.tail)
+                        .help(node.displayTitle)
                     Spacer()
                     FlagBadges(node: node, conflicts: conflicts, compact: true)
                 }
@@ -272,8 +270,10 @@ struct AllCard: View {
                     if !node.junk.isEmpty { JunkList(node: node, model: model) }
                 }
             } else {
-                Text("→ \(node.displayTitle) · \(node.seasonSummary)")
-                    .font(.callout).foregroundStyle(.secondary)
+                (Text("→ ").foregroundStyle(.secondary)
+                 + Text(node.displayTitle).foregroundStyle(Palette.renamed)
+                 + Text(" · \(node.seasonSummary)").foregroundStyle(.secondary))
+                    .font(.callout)
                     .lineLimit(1).truncationMode(.middle)
             }
         }
@@ -289,10 +289,12 @@ struct PairRow: View {
     let pair: PreviewPair
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(pair.new).font(.system(.body, design: .monospaced))
+            Text(pair.new)
+                .font(.system(.body, design: .monospaced))
+                .foregroundStyle(Palette.renamed)         // new name
             Text("← \(pair.old)")
                 .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.secondary)              // original name (muted)
         }
     }
 }
@@ -334,7 +336,7 @@ struct JunkList: View {
                     set: { model.setJunkTrashed(url, $0) }
                 )) {
                     HStack(spacing: 6) {
-                        Image(systemName: "trash").foregroundStyle(.red)
+                        Image(systemName: "trash").foregroundStyle(Palette.junk)
                         Text(url.lastPathComponent)
                             .font(.system(.callout, design: .monospaced))
                     }
@@ -376,7 +378,7 @@ struct ConflictResolveView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Duplicate target", systemImage: "exclamationmark.triangle.fill")
-                .font(.headline).foregroundStyle(.red)
+                .font(.headline).foregroundStyle(Palette.conflict)
             Text("\(group.count) files want the same name. Give each a version label to keep them all — they’ll share one folder, the way Plex and Jellyfin expect.")
                 .font(.callout).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -393,7 +395,7 @@ struct ConflictResolveView: View {
                             .frame(maxWidth: 220)
                         Text("→ \(resultName(for: src))")
                             .font(.system(.caption, design: .monospaced))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Palette.renamed)
                             .lineLimit(1).truncationMode(.middle)
                     }
                 }
@@ -414,7 +416,7 @@ struct ConflictResolveView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+        .background(Palette.conflict.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
         .onAppear { if labels.isEmpty { labels = QualityTag.distinctLabels(for: group) } }
     }
 
@@ -440,21 +442,3 @@ struct ConflictResolveView: View {
     }
 }
 
-// MARK: - Detail top inset
-
-extension View {
-    /// On macOS 26 a toolbar-bearing NavigationSplitView lets the detail's scroll
-    /// content slide up under the acronym bar, whose translucent material blurs
-    /// the first row (the inspector's headline title) into a washed-out strip.
-    /// (The sidebar's `List` insets itself, so it's unaffected.) When that bar is
-    /// showing, inset the scroll content below it so the title stays crisp.
-    /// No-op when the bar is hidden, and pre-macOS 26 where no blur occurs.
-    @ViewBuilder
-    func clearAcronymBarBlur(active: Bool) -> some View {
-        if active, #available(macOS 26.0, *) {
-            contentMargins(.top, 34, for: .scrollContent)
-        } else {
-            self
-        }
-    }
-}
