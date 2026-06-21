@@ -75,6 +75,34 @@ struct ReplanTests {
         ])
     }
 
+    /// A title edit re-evaluates the empty-source-folder cleanup instead of
+    /// freezing the build-time decision (#4). A folder already named after its
+    /// title gets no cleanup op at build (it IS the destination); after renaming
+    /// the title, the now-orphaned source folder must be scheduled for removal —
+    /// and reverting the title drops it again.
+    @Test func titleEditReevaluatesEmptySourceCleanup() {
+        let root = makeTempRoot(); defer { try? fm.removeItem(at: root) }
+        let folder = root.appendingPathComponent("Breaking Bad")
+        touch(folder.appendingPathComponent("Breaking.Bad.S01E01.mkv"))
+        func hasCleanup(_ np: NodePlan) -> Bool {
+            np.operations.contains { if case .removeEmptyDirectory = $0 { return true }; return false }
+        }
+
+        let n = node(PlanBuilder.plan(root: root).nodes, "Breaking Bad")!
+        #expect(!hasCleanup(n))   // source folder already IS the destination
+
+        let edited = PlanBuilder.replan(n, title: "Breaking Bad Remastered", year: "", root: root)
+        #expect(edited.operations.contains {
+            if case let .removeEmptyDirectory(d) = $0 {
+                return d.standardizedFileURL == folder.standardizedFileURL
+            }
+            return false
+        })
+
+        let reverted = PlanBuilder.replan(edited, title: "Breaking Bad", year: "", root: root)
+        #expect(!hasCleanup(reverted))   // op isn't frozen — it follows the title
+    }
+
     /// Editing one of two colliding movie *folders* to a unique title clears the
     /// conflict. (Two loose copies of one title now share a single node, so a
     /// per-node title edit can't split them — that's the version-label resolver's
