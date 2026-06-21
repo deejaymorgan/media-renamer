@@ -13,3 +13,6 @@ build/
 xcuserdata/
 *.xcodeproj/project.xcworkspace/xcuserdata/
 *.xcodeproj/xcuserdata/
+
+# Local-only working notes (internal dev/handoff docs, not for public consumption)
+notes/
