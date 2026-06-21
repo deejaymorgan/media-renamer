@@ -13,6 +13,29 @@ public enum PlanBuilder {
         return Plan(root: root, nodes: nodes, conflicts: ConflictChecker.detect(in: nodes))
     }
 
+    /// Assemble a full plan the way the app's rebuild does, in one place: build
+    /// from `root` with the given acronym map, apply version-label
+    /// disambiguation, then re-apply manual title/year edits (each keyed by a
+    /// node's source URL). Sharing this ordering between the UI and tests is what
+    /// lets a manual title edit survive an acronym-map change, which rebuilds the
+    /// whole plan from scratch — `disambiguation`/`titleEdits` are re-applied on
+    /// top exactly as they were the first time.
+    ///
+    /// Each edit targets its own node and every `replan` re-detects conflicts
+    /// across the full plan, so the iteration order over `titleEdits` does not
+    /// affect the result.
+    public static func assemble(root: URL,
+                                acronyms: [String: String] = [:],
+                                disambiguation: [URL: String] = [:],
+                                titleEdits: [URL: (title: String, year: String)] = [:]) -> Plan {
+        var p = plan(root: root, acronyms: acronyms)
+        if !disambiguation.isEmpty { p = resolve(p, suffixes: disambiguation) }
+        for (src, edit) in titleEdits {
+            p = replan(p, itemSource: src, title: edit.title, year: edit.year)
+        }
+        return p
+    }
+
     /// Node plans for `root`. Subfolders and unrecognised loose files keep their
     /// own node; loose video files that share a show (TV) or title+year
     /// (movie) collapse into a single node — and, when the root also holds a
