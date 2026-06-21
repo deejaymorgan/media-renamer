@@ -116,6 +116,32 @@ struct ConflictResolveTests {
         #expect(resolved.conflicts.isEmpty)
     }
 
+    /// `conflictedSources` is unit-aware, not move-only: the resident node in a
+    /// split-folder collision sits in place (no move op) yet must still surface
+    /// its conflicted source, so its badge/resolver appears alongside the mover's.
+    /// Same shape as `splitFolderInPlaceCollisionIsFlaggedAndResolvable`. (#3)
+    @Test func conflictedSourcesSurfacesResidentInPlaceUnit() {
+        let root = makeTempRoot(); defer { try? fm.removeItem(at: root) }
+        touch(root.appendingPathComponent("Inception (2010)/Inception (2010).mkv"))
+        let scene = root.appendingPathComponent("Inception.2010.2160p.UHD.BluRay")
+        touch(scene.appendingPathComponent("Inception.2010.2160p.UHD.BluRay.mkv"))
+
+        let plan = PlanBuilder.plan(root: root)
+        #expect(plan.conflicts.count == 2)
+
+        // The resident folder node has no move op (it's already organized), so the
+        // old move-only helper saw nothing here — the unit-aware one surfaces it.
+        let resident = plan.nodes.first { $0.source.lastPathComponent == "Inception (2010)" }!
+        let residentMoves = resident.operations.contains(where: \.isMove)
+        #expect(!residentMoves)
+        #expect(resident.conflictedSources(in: plan.conflicts) == resident.units.map(\.source))
+        #expect(resident.conflictedSources(in: plan.conflicts).count == 1)
+
+        // The moving scene node is surfaced too (it always was).
+        let mover = plan.nodes.first { $0.source.lastPathComponent == "Inception.2010.2160p.UHD.BluRay" }!
+        #expect(mover.conflictedSources(in: plan.conflicts).count == 1)
+    }
+
     /// Two versions of the same movie collide on one destination; labelling them
     /// clears the conflict and yields two distinct files in one shared folder.
     /// (Sharing a title+year, the two loose copies are grouped into one node.)

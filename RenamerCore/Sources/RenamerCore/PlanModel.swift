@@ -148,11 +148,11 @@ public extension Plan {
 }
 
 public extension NodePlan {
-    /// This node's move sources that are currently caught in a conflict.
+    /// This node's sources that are currently caught in a conflict. Unit-aware,
+    /// not move-only: a resident occupant already at its destination emits no
+    /// move op but is still flagged (an incoming move would silently skip it), so
+    /// the resident node must surface the badge/resolver too — not just the mover.
     func conflictedSources(in conflicts: Set<URL>) -> [URL] {
-        operations.compactMap {
-            if case let .move(from, _) = $0, conflicts.contains(from) { return from }
-            return nil
-        }
+        units.map(\.source).filter(conflicts.contains)
     }
 }

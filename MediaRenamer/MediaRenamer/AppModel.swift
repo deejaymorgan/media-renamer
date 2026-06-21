@@ -282,10 +282,9 @@ extension NodePlan {
     }
 
     func isConflicted(in conflicts: Set<URL>) -> Bool {
-        operations.contains { op in
-            if case let .move(from, _) = op { return conflicts.contains(from) }
-            return false
-        }
+        // Unit-aware, not move-only: a resident occupant already in place emits no
+        // move op but is still flagged, so its node must show the badge too.
+        units.contains { conflicts.contains($0.source) }
     }
 
     /// The distinct conflict groups this node takes part in, each paired with
@@ -297,10 +296,14 @@ extension NodePlan {
             guard let group = plan.conflictGroup(containing: src) else { continue }
             let key = group.map(\.path).joined(separator: "|")
             guard seen.insert(key).inserted else { continue }
+            // The destination filename the group is fighting over: a mover's
+            // `to`, or — for a resident in-place unit with no move op — its own
+            // current name (which already IS its destination). Never "", so the
+            // resolver always shows a real target.
             let target = operations.compactMap { op -> String? in
                 if case let .move(from, to) = op, from == src { return to.lastPathComponent }
                 return nil
-            }.first ?? ""
+            }.first ?? src.lastPathComponent
             out.append((group, target))
         }
         return out
