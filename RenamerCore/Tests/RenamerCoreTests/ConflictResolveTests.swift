@@ -97,6 +97,25 @@ struct ConflictResolveTests {
         #expect(resolved.conflicts.isEmpty)
     }
 
+    /// Two SEPARATE folders for one movie (one already organized in place, one a
+    /// scene folder) both target the same canonical name. They don't merge (only
+    /// loose files merge into folders), so the resident contributes an in-place
+    /// unit and the scene folder a move — the collision must still be flagged and
+    /// resolvable. (#3, split-node in-place shape) (#3)
+    @Test func splitFolderInPlaceCollisionIsFlaggedAndResolvable() {
+        let root = makeTempRoot(); defer { try? fm.removeItem(at: root) }
+        touch(root.appendingPathComponent("Inception (2010)/Inception (2010).mkv"))
+        let scene = root.appendingPathComponent("Inception.2010.2160p.UHD.BluRay")
+        touch(scene.appendingPathComponent("Inception.2010.2160p.UHD.BluRay.mkv"))
+
+        let plan = PlanBuilder.plan(root: root)
+        #expect(plan.conflicts.count == 2)        // resident + scene mover both flagged
+        #expect(plan.conflictGroups.count == 1)
+
+        let resolved = PlanBuilder.resolve(plan, suffixes: QualityTag.distinctLabels(for: plan.conflictGroups[0]))
+        #expect(resolved.conflicts.isEmpty)
+    }
+
     /// Two versions of the same movie collide on one destination; labelling them
     /// clears the conflict and yields two distinct files in one shared folder.
     /// (Sharing a title+year, the two loose copies are grouped into one node.)
