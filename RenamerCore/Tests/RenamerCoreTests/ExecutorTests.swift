@@ -78,6 +78,38 @@ struct ExecutorTests {
         #expect(exists(root, "Inception.2010.1080p.BluRay.x264.mkv"))   // source untouched
     }
 
+    /// Is the temp volume case-insensitive (the macOS default)? The case-only
+    /// rename bug this guards against only exists there; on a case-sensitive
+    /// volume the two names are genuinely different files.
+    private func isCaseInsensitive(_ root: URL) -> Bool {
+        let probe = root.appendingPathComponent("CaseProbe.tmp")
+        touch(probe)
+        defer { try? fm.removeItem(at: probe) }
+        return fm.fileExists(atPath: root.appendingPathComponent("caseprobe.TMP").path)
+    }
+
+    @Test func appliesCaseOnlyRename() {
+        let root = makeTempRoot(); defer { try? fm.removeItem(at: root) }
+        guard isCaseInsensitive(root) else { return }   // not applicable; pass
+
+        // A file that only needs its case corrected, inside an existing folder.
+        let dir = root.appendingPathComponent("Some Show/Season 1")
+        let from = dir.appendingPathComponent("some show s01e01.mkv")
+        let to = dir.appendingPathComponent("Some Show S01E01.mkv")
+        touch(from)
+
+        let node = NodePlan(source: from, mediaType: .tv, status: .rename,
+                            operations: [.move(from: from, to: to)])
+        let result = Executor.apply(nodes: [node], conflicts: [])
+
+        #expect(result.movedCount == 1)        // performed, not skipped as "exists"
+        #expect(result.conflictCount == 0)
+        #expect(result.errorCount == 0)
+        // The stored name now carries the corrected case.
+        let names = (try? fm.contentsOfDirectory(atPath: dir.path)) ?? []
+        #expect(names == ["Some Show S01E01.mkv"])
+    }
+
     @Test func skipsBatchConflicts() {
         let root = makeTempRoot(); defer { try? fm.removeItem(at: root) }
         touch(root.appendingPathComponent("Inception.2010.1080p.BluRay.x264.mkv"))
