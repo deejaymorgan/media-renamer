@@ -85,6 +85,40 @@ struct SafetyTests {
         #expect(edited.previewPairs.map(\.new) == ["Inception/Inception.mkv"])
     }
 
+    /// PlanBuilder.build must not follow a symlinked directory sitting at the
+    /// root: its out-of-tree media must not be planned for relocation, and Apply
+    /// must leave the link's target untouched. (Scanner.walk already guards
+    /// nested symlinks; the root listing was the gap.)
+    @Test func buildSkipsRootLevelSymlink() throws {
+        let root = makeTempRoot(); defer { try? fm.removeItem(at: root) }
+        // An out-of-tree directory holding real media the user did NOT choose.
+        let outside = makeTempRoot(); defer { try? fm.removeItem(at: outside) }
+        let stranger = outside.appendingPathComponent("Other.S09E09.1080p.mkv")
+        touch(stranger)
+        // A symlink at the root pointing into it.
+        try fm.createSymbolicLink(at: root.appendingPathComponent("linked"),
+                                  withDestinationURL: outside)
+        // A normal loose movie so the plan isn't empty.
+        touch(root.appendingPathComponent("Inception.2010.1080p.BluRay.mkv"))
+
+        let plan = PlanBuilder.plan(root: root)
+
+        // The symlink becomes an inert skip node with no operations.
+        let link = node(plan.nodes, "linked")
+        #expect(link?.status == .skip)
+        #expect(link?.operations.isEmpty == true)
+        // Nothing from inside the link is scheduled to move.
+        let touchesLink = plan.nodes.flatMap(\.operations).contains { op in
+            if case let .move(from, _) = op { return from.path.contains("/linked/") }
+            return false
+        }
+        #expect(!touchesLink)
+
+        _ = Executor.apply(plan)
+        #expect(fm.fileExists(atPath: stranger.path))                          // target media untouched
+        #expect(Scanner.isSymlink(root.appendingPathComponent("linked")))      // link itself not removed
+    }
+
     /// scanContents must not follow symlinked directories: a self-referential
     /// link can't loop, and an out-of-tree link's contents aren't pulled in.
     @Test func scanContentsSkipsSymlinkedDirectories() throws {

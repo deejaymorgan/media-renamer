@@ -26,7 +26,14 @@ public enum PlanBuilder {
 
         for (i, entry) in Scanner.listDir(root).enumerated() {
             let base = entry.lastPathComponent
-            if !Scanner.isDirectory(entry) {
+            if Scanner.isSymlink(entry) {
+                // Don't follow symlinks at the root (mirrors Scanner.walk's
+                // no-follow rule for nested dirs): a link out of the tree would
+                // pull in — and on Apply, relocate — files the user never chose,
+                // and a self-referential one could loop. Skip, don't treat as junk.
+                fixed[i] = NodePlan(source: entry, mediaType: .unknown, status: .skip,
+                                    note: "symlink (not followed)")
+            } else if !Scanner.isDirectory(entry) {
                 let ext = Str.splitext(base).ext.lowercased()
                 if !Constants.videoExtensions.contains(ext) {
                     fixed[i] = NodePlan(source: entry, mediaType: .unknown, status: .skip,
@@ -107,6 +114,7 @@ public enum PlanBuilder {
     public static func allCapsWords(root: URL) -> [String] {
         var names: [String] = []
         for entry in Scanner.listDir(root) {
+            if Scanner.isSymlink(entry) { continue }   // don't follow links at the root
             if Scanner.isDirectory(entry) {
                 if Constants.ignoredFolderNames.contains(entry.lastPathComponent.lowercased()) { continue }
                 names += Scanner.scanContents(entry).videos.map { $0.lastPathComponent }
