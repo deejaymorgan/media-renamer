@@ -14,6 +14,20 @@ struct DeletingTrasher: Trasher {
     }
 }
 
+/// A Trasher double that fails on any item whose name contains "fail" (and
+/// deletes the rest), to exercise the mixed success/failure path.
+struct PartialFailTrasher: Trasher {
+    func trash(_ urls: [URL]) -> [TrashOutcome] {
+        urls.map { url in
+            if url.lastPathComponent.contains("fail") {
+                return TrashOutcome(source: url, trashedTo: nil, error: "permission denied")
+            }
+            try? FileManager.default.removeItem(at: url)
+            return TrashOutcome(source: url, trashedTo: nil, error: nil)
+        }
+    }
+}
+
 @Suite("Apply with junk trashing")
 struct ApplyJunkTests {
 
@@ -63,5 +77,28 @@ struct ApplyJunkTests {
         #expect(result.movedCount == 1)
         #expect(fm.fileExists(atPath: folder.path))
         #expect(fm.fileExists(atPath: folder.appendingPathComponent("info.nfo").path))
+    }
+
+    /// A junk file that fails to trash is reported (count + message) and, because
+    /// it survives, the source folder is non-empty and correctly left in place.
+    @Test func partialTrashFailureIsReportedAndSourceKept() {
+        let root = makeTempRoot(); defer { try? fm.removeItem(at: root) }
+        let folder = root.appendingPathComponent("Some.Show.S01.COMPLETE")
+        touch(folder.appendingPathComponent("Some.Show.S01E01.mkv"))
+        touch(folder.appendingPathComponent("info.nfo"))   // junk — trashes OK
+        touch(folder.appendingPathComponent("fail.nfo"))   // junk — trash fails
+
+        let plan = PlanBuilder.plan(root: root)
+        let junk = plan.nodes.flatMap { $0.junk }
+        #expect(junk.count == 2)
+
+        let result = Executor.apply(plan, trashing: junk, using: PartialFailTrasher())
+        #expect(result.trashedCount == 1)
+        #expect(result.errorCount == 1)
+        #expect(result.movedCount == 1)
+        #expect(result.messages.contains { $0.contains("Trash failed") })
+        // One junk file survived ⇒ source folder non-empty ⇒ left in place.
+        #expect(fm.fileExists(atPath: folder.path))
+        #expect(fm.fileExists(atPath: folder.appendingPathComponent("fail.nfo").path))
     }
 }

@@ -386,8 +386,9 @@ public enum PlanBuilder {
 
     /// Replace the characters that would split or redirect a path component
     /// (`/`, `\`, `:`) with `-` and trim surrounding whitespace. Leaves all other
-    /// content untouched, so ordinary titles pass through byte-for-byte.
-    static func sanitizeSeparators(_ s: String) -> String {
+    /// content untouched, so ordinary titles pass through byte-for-byte. Public
+    /// so the UI can render a version-label preview that matches the on-disk name.
+    public static func sanitizeSeparators(_ s: String) -> String {
         s.replacingOccurrences(of: "/", with: "-")
             .replacingOccurrences(of: "\\", with: "-")
             .replacingOccurrences(of: ":", with: "-")
