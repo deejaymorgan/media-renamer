@@ -225,6 +225,10 @@ is a no-op rather than a re-flagged conflict.
 - **Loose sidecars aren't grouped.** Loose-file grouping collects videos only; a
   subtitle sitting loose at the root (not inside a folder) is still listed as an
   individual skipped entry rather than following its grouped video.
+- **macOS 26 chrome polish (in progress).** On macOS 26 (Liquid Glass) the
+  toolbar summary spacing and the inspector title's clearance under the acronym
+  bar have only been partially refined — improved, not finished. See
+  [`docs/macos26-chrome-refinements.md`](docs/macos26-chrome-refinements.md).
 
 ---
 
