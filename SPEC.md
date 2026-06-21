@@ -82,7 +82,7 @@ media-renamer/
       QualityTag.swift              # version-label parsing for the resolver (new — no oracle)
       Executor.swift                # apply moves + empty-dir cleanup; ApplyResult
       Trasher.swift                 # Trasher protocol + SystemTrasher (real macOS Trash)
-    Tests/RenamerCoreTests/         # swift test — mirrors the Python oracle (69 tests, 8 suites)
+    Tests/RenamerCoreTests/         # swift test — mirrors the Python oracle (91 tests, 11 suites)
   MediaRenamer/
     MediaRenamer.xcodeproj          # app target; links ../RenamerCore as a local package
     MediaRenamer/
@@ -141,7 +141,7 @@ behind a confirmation dialog.
 | Engine | `RenamerCore` Swift Package — `swift-tools 6.0`, Foundation only |
 | App language mode | `SWIFT_VERSION = 5.0` (app target); engine uses tools 6.0 |
 | UI | SwiftUI |
-| Min OS | Engine package: macOS 13+. App deployment target: the installed SDK default (macOS 26.5) — lower it if you need to run on older macOS |
+| Min OS | Engine package: macOS 13+. App deployment target: **macOS 14.0** (`MACOSX_DEPLOYMENT_TARGET = 14.0`, required by the Observation framework) |
 | Tests | Swift Testing (`swift test`) — engine only, no Xcode needed |
 | Trash | `FileManager.trashItem` (via `SystemTrasher`) |
 | Settings | `UserDefaults` (acronym modes persisted) |
@@ -280,7 +280,7 @@ changes through identical code.
 ## 9. Testing
 
 - `swift test --package-path RenamerCore` runs the engine suite headlessly
-  (no Xcode, no display) — **69 tests across 8 suites**, the parity contract for
+  (no Xcode, no display) — **91 tests across 11 suites**, the parity contract for
   every rule.
 - New parsing/planning/execution code lands with mirrored cases from the Python
   `tests/test_renamer.py` oracle. The quality-tag and duplicate-resolve suites
@@ -299,5 +299,6 @@ changes through identical code.
 3. **Undo depth** — last run only (recommended) vs a multi-step history.
 4. **Settings surface** — `UserDefaults` for now (acronyms persisted); revisit if
    it grows.
-5. **App deployment target** — currently the SDK default (macOS 26.5). Lower it
-   to widen the supported OS range before any real distribution.
+5. ~~App deployment target.~~ **Resolved:** set to **macOS 14.0**
+   (`MACOSX_DEPLOYMENT_TARGET = 14.0`), the floor for the Observation framework.
+   Raise the floor only if a newer-only API is adopted.

@@ -28,6 +28,12 @@ public enum Scanner {
                 if name.hasPrefix(".") { continue }
                 let path = dir.appendingPathComponent(name)
                 if isDirectory(path) {
+                    // Skip symlinked directories entirely (mirrors the Python
+                    // oracle's `os.walk(followlinks=False)`): a self-referential
+                    // link would loop forever, and a link out of the tree would
+                    // pull in — and on Apply, relocate — files the user never
+                    // chose. We don't follow them and don't treat them as junk.
+                    if isSymlink(path) { continue }
                     if Constants.ignoredFolderNames.contains(name.lowercased()) { continue }
                     if isJunk(name) { junk.append(path); continue }
                     walk(path)
@@ -62,5 +68,10 @@ public enum Scanner {
         var isDir: ObjCBool = false
         FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir)
         return isDir.boolValue
+    }
+
+    /// Whether the URL is itself a symbolic link (without resolving its target).
+    static func isSymlink(_ url: URL) -> Bool {
+        (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink ?? false
     }
 }
