@@ -102,14 +102,14 @@ final class AppModel {
 
     private func rebuildPlan() {
         guard let folderURL else { return }
-        var p = PlanBuilder.plan(root: folderURL, acronyms: acronymMap)
-        if !disambiguation.isEmpty { p = PlanBuilder.resolve(p, suffixes: disambiguation) }
-        // Re-apply manual title/year edits so they survive an acronym-driven
-        // rebuild (each edit targets its own node; conflicts are re-detected by
-        // the last replan, so order doesn't matter).
-        for (src, edit) in titleEdits {
-            p = PlanBuilder.replan(p, itemSource: src, title: edit.title, year: edit.year)
-        }
+        // Build → resolve duplicates → re-apply manual title/year edits, so an
+        // edit survives an acronym-driven rebuild. The three-pass ordering lives
+        // in PlanBuilder.assemble (a pure, Foundation-only helper covered by
+        // RenamerCore tests); recording an edit only on a real change — so merely
+        // viewing a node can't pin a phantom edit and veto acronym toggles — is
+        // the UI-side guard in `replan` below.
+        let p = PlanBuilder.assemble(root: folderURL, acronyms: acronymMap,
+                                     disambiguation: disambiguation, titleEdits: titleEdits)
         plan = p
         if selection == nil {
             selection = p.nodes.first(where: { $0.status == .rename }).map { .item($0.source) } ?? .all
