@@ -141,7 +141,16 @@ public enum PlanBuilder {
                                      new: relativePath(dst, from: root)))
             if unit.source.path != dst.path { ops.append(.move(from: unit.source, to: dst)) }
         }
-        for op in node.operations where !op.isMove { ops.append(op) }
+        // Re-derive the empty-source-folder cleanup from the CURRENT title/year
+        // rather than preserving the build-time op: a title/year edit moves the
+        // destination folder, so a source folder that *was* the destination may no
+        // longer be (and would otherwise be orphaned), or vice-versa. Only
+        // folder-backed nodes have a source directory to clean up; loose nodes don't.
+        if Scanner.isDirectory(node.source),
+           node.source.standardizedFileURL.path
+             != destinationFolder(node, root: root).standardizedFileURL.path {
+            ops.append(.removeEmptyDirectory(node.source))
+        }
 
         updated.previewPairs = pairs
         updated.operations = ops
@@ -353,8 +362,8 @@ public enum PlanBuilder {
         }
 
         // Remove the now-empty source folder (unless it *is* the destination).
-        let mediaDir = root.appendingPathComponent(title)
-        if folder.standardizedFileURL.path != mediaDir.standardizedFileURL.path {
+        if folder.standardizedFileURL.path
+             != destinationFolder(plan, root: root).standardizedFileURL.path {
             plan.operations.append(.removeEmptyDirectory(folder))
         }
 
@@ -390,6 +399,21 @@ public enum PlanBuilder {
             return root.appendingPathComponent(full)
                 .appendingPathComponent("\(full)\(suffix)\(unit.languageSuffix)\(unit.ext)")
         }
+    }
+
+    /// The top-level folder under `root` that a node's files land in — named for
+    /// the title (TV) or `Title (Year)` (movie). Mirrors the first path component
+    /// of `computeDestination`, and is the folder an emptied source is compared
+    /// against to decide on cleanup. Single source of truth for both build
+    /// (`planFolder`) and re-plan (`recompute`).
+    static func destinationFolder(_ node: NodePlan, root: URL) -> URL {
+        let safeTitle = pathComponentSafe(node.editTitle, fallback: "Untitled")
+        if node.mediaType == .tv {
+            return root.appendingPathComponent(safeTitle)
+        }
+        let safeYear = sanitizeSeparators(node.editYear)
+        let name = safeYear.isEmpty ? safeTitle : "\(safeTitle) (\(safeYear))"
+        return root.appendingPathComponent(name)
     }
 
     /// Replace the characters that would split or redirect a path component
