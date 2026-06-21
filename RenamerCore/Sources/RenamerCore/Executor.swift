@@ -88,7 +88,17 @@ public enum Executor {
                     }
                 case let .removeEmptyDirectory(dir):
                     let contents = (try? fm.contentsOfDirectory(atPath: dir.path)) ?? []
-                    if contents.isEmpty { try? fm.removeItem(at: dir) }
+                    // A non-empty source is expected (kept junk / skipped files)
+                    // and left in place silently; only a genuine removal failure
+                    // on an emptied folder is worth reporting.
+                    guard contents.isEmpty else { continue }
+                    do {
+                        try fm.removeItem(at: dir)
+                    } catch {
+                        result.errorCount += 1
+                        result.messages.append(
+                            "Couldn't remove emptied folder \(dir.lastPathComponent): \(error.localizedDescription)")
+                    }
                 }
             }
         }

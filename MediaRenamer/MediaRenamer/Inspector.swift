@@ -53,7 +53,7 @@ struct EditFields: View {
             if node.mediaType == .movie {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Year").font(.caption).foregroundStyle(.secondary)
-                    TextField("Year", text: $year)
+                    TextField("Year", text: yearProxy)
                         .textFieldStyle(.roundedBorder)
                         .frame(width: 72)
                 }
@@ -66,6 +66,14 @@ struct EditFields: View {
         .onChange(of: year) { _, new in
             model.replan(itemSource: node.source, title: title, year: new)
         }
+    }
+
+    /// Keeps the Year field to at most four digits as the user types, so a
+    /// non-numeric or over-long year can't reach the rename plan. Clearing it is
+    /// still allowed (an empty year drops the parenthetical in the engine).
+    private var yearProxy: Binding<String> {
+        Binding(get: { year },
+                set: { year = String($0.filter(\.isNumber).prefix(4)) })
     }
 }
 
@@ -425,9 +433,11 @@ struct ConflictResolveView: View {
     }
 
     /// The destination filename with this file's label spliced in before the
-    /// extension — a live preview of what "Resolve" will produce.
+    /// extension — a live preview of what "Resolve" will produce. The label is
+    /// sanitised exactly as the engine does (`PlanBuilder.sanitizeSeparators`),
+    /// so the preview matches the name that actually lands on disk.
     private func resultName(for src: URL) -> String {
-        let lbl = (labels[src] ?? "").trimmingCharacters(in: .whitespaces)
+        let lbl = PlanBuilder.sanitizeSeparators(labels[src] ?? "")
         guard !lbl.isEmpty else { return targetName }
         let ns = targetName as NSString
         let ext = ns.pathExtension
