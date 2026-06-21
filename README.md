@@ -75,7 +75,7 @@ SPEC.md        Full specification + roadmap.
 **Working app.** Pick a folder → preview the plan → edit titles, set acronym
 casing, choose which junk to trash, resolve duplicate versions → **Apply**
 (real renames + empty-folder cleanup + junk to the macOS Trash). The engine is
-parity-tested against the Python oracle (92 tests).
+parity-tested against the Python oracle (93 tests).
 
 Not built yet: undo UI, online title verification, and a *notarised* `.app`
 (unsigned ad-hoc packaging works today — see above; see the roadmap in `SPEC.md`).

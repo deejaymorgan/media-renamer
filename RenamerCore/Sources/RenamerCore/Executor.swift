@@ -70,7 +70,12 @@ public enum Executor {
             for op in node.operations {
                 switch op {
                 case let .move(from, to):
-                    if fm.fileExists(atPath: to.path) {
+                    // On a case-insensitive volume (the macOS default) a
+                    // case-only rename — e.g. `show s01e01.mkv` → `Show S01E01.mkv`
+                    // in the same folder — has `fileExists(at: to)` find the
+                    // *source itself*. That is not a real conflict: skip only when
+                    // a genuinely different item already occupies the destination.
+                    if fm.fileExists(atPath: to.path) && !sameItem(from, to) {
                         result.conflictCount += 1
                         result.messages.append("Skipped (target exists): \(to.lastPathComponent)")
                         continue
@@ -103,5 +108,17 @@ public enum Executor {
             }
         }
         return result
+    }
+
+    /// True when `a` and `b` resolve to the same on-disk item. On a
+    /// case-insensitive volume the destination of a case-only rename resolves to
+    /// the source, so its "existence" must not be treated as a conflict — the
+    /// rename (a case change in place) is valid and `moveItem` performs it.
+    private static func sameItem(_ a: URL, _ b: URL) -> Bool {
+        let key: Set<URLResourceKey> = [.fileResourceIdentifierKey]
+        guard let ida = try? a.resourceValues(forKeys: key).fileResourceIdentifier,
+              let idb = try? b.resourceValues(forKeys: key).fileResourceIdentifier
+        else { return false }
+        return ida.isEqual(idb)
     }
 }
