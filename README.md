@@ -25,13 +25,25 @@ casing, choose which junk to trash, resolve duplicate versions → **Apply**
 (real renames + empty-folder cleanup + junk to the macOS Trash). The engine is
 parity-tested against the Python oracle (91 tests).
 
-Not built yet: undo UI, online title verification, and a packaged `.app`
-(see the roadmap in `SPEC.md`).
+Not built yet: undo UI, online title verification, and a *notarised* `.app`
+(unsigned ad-hoc packaging works today — see below; see the roadmap in `SPEC.md`).
 
 ## Run the app
 
 Open `MediaRenamer/MediaRenamer.xcodeproj` in Xcode and press ⌘R. Preview is
 read-only; only **Apply** touches disk, and it confirms first. Try it on a copy.
+
+## Package a shareable build
+
+```sh
+./scripts/package-unsigned.sh   # -> build/MediaRenamer-unsigned.zip (universal, ad-hoc)
+```
+
+This needs no Apple Developer account. The app is **not notarised**, so on
+another Mac the first launch is blocked by Gatekeeper — open it once with
+right-click → Open (the script prints the exact steps). For a no-warning,
+double-click experience, get a paid Developer ID and run `scripts/notarize.sh`
+instead.
 
 ## Test the engine
 

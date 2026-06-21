@@ -1,11 +1,14 @@
 # M8 — Packaging for distribution (handoff agenda)
 
-**Status:** Solo prep DONE — awaiting Apple credentials · **Updated:** 2026-06-21 · **Branch:** `main`
+**Status:** Shippable UNSIGNED (ad-hoc) now · notarised path deferred · **Updated:** 2026-06-21 · **Branch:** `main`
 
-Distribution **is in scope** (decided 2026-06-21): the goal is a notarised,
-double-clickable `.app` that runs outside Xcode, not just a personal ⌘R tool.
-This note is the next-session agenda. The functional core is done and green —
-M8 is build/release plumbing, not app logic.
+Distribution **is in scope** (decided 2026-06-21): a `.app` that runs outside
+Xcode. **Decision (2026-06-21): ship UNSIGNED (ad-hoc) for now** — no paid Apple
+Developer account. `scripts/package-unsigned.sh` builds a shareable zip today;
+recipients open it once past Gatekeeper (right-click → Open). The notarised,
+double-click-clean path is fully prepped (`scripts/notarize.sh`) and waiting only
+on a Developer ID account — pick it up whenever that's worth $99/yr. The
+functional core is done and green; M8 is build/release plumbing, not app logic.
 
 ## Where things stand
 - Pre-release review + hardening landed in two commits:
@@ -24,8 +27,9 @@ M8 is build/release plumbing, not app logic.
 | Hardened Runtime | ✅ DONE | `ENABLE_HARDENED_RUNTIME = YES` in both Debug + Release target configs |
 | Entitlements | ✅ DONE | `MediaRenamer.entitlements` (intentionally empty; sandbox off, no exceptions needed) + `CODE_SIGN_ENTITLEMENTS` wired in both configs |
 | LICENSE | ✅ DONE | MIT, "Daniel Morgan", 2026, at repo root |
-| Notarise script | ✅ DONE | `scripts/notarize.sh` — archive→export→notarytool→staple, with a release checklist |
-| Signing identity | ⛔ NEEDS YOU | `CODE_SIGN_STYLE = Automatic`, **no `DEVELOPMENT_TEAM` / Developer ID** — supply Team ID + cert |
+| Unsigned packaging | ✅ DONE | `scripts/package-unsigned.sh` builds a universal ad-hoc app + shareable zip; **runs today, no account** |
+| Notarise script | ✅ DONE | `scripts/notarize.sh` — archive→export→notarytool→staple, with a release checklist (for the paid path) |
+| Signing identity | ⏸ DEFERRED | Chose unsigned for now. Only needed for the notarised path: a `DEVELOPMENT_TEAM` + Developer ID cert |
 | Sandbox | ✅ left OFF | Correct for Developer-ID distribution *outside* the App Store |
 | Bundle ID | ✅ `com.djmorgan.MediaRenamer` | — |
 
@@ -49,6 +53,11 @@ M8 is build/release plumbing, not app logic.
    `notarize.sh`'s `xcodebuild archive -scheme MediaRenamer` is reproducible on a
    clean clone / another machine / CI — previously the scheme lived only in
    git-ignored `xcuserdata/`.
+6. ✅ `scripts/package-unsigned.sh` — the chosen path. Builds a **universal**
+   (`x86_64 + arm64`) ad-hoc-signed Release `.app` and zips it to
+   `build/MediaRenamer-unsigned.zip`, then prints recipient instructions. **Run &
+   verified**: build succeeds, `Signature=adhoc`, `spctl` rejects (expected for
+   unsigned — recipients open once via right-click → Open).
 
 Verified after the changes: `swift test --package-path RenamerCore` = **92 tests /
 11 suites green**; Debug **and** Release `xcodebuild … build` = **BUILD SUCCEEDED**;
@@ -66,16 +75,27 @@ warning (now fixed); `codesign --verify` dropped the Apple-discouraged `--deep`.
   and is harmless, so it was left as-is. Can be removed for a more minimal,
   intention-revealing non-sandboxed config.
 
-**Needs you (outward-facing / credentials) — leave for the user:**
+## Ship an unsigned build now (chosen path)
+```sh
+./scripts/package-unsigned.sh        # -> build/MediaRenamer-unsigned.zip
+```
+Send the zip. Recipients open it once past Gatekeeper (right-click → Open; or
+clear quarantine with `xattr -dr com.apple.quarantine MediaRenamer.app`). No
+Apple account, no cost. Caveat: every recipient sees the first-launch warning.
+
+## Later: switch to notarised (only if/when worth $99/yr)
+A paid **Apple Developer Program** membership is required — a free Apple ID
+cannot issue a Developer ID cert or notarise. When ready:
 - Set `DEVELOPMENT_TEAM` (Team ID) + a Developer ID Application certificate.
 - Fill `TEAM_ID` / `SIGNING_IDENTITY` in `scripts/notarize.sh` (or export them).
 - One-time: `xcrun notarytool store-credentials` (app-specific password).
-- Run `./scripts/notarize.sh` with your Apple credentials.
-- Provide or approve the final icon art (replaces the placeholder).
+- Run `./scripts/notarize.sh`. Result: double-click-clean, no warnings.
+- Replace the placeholder icon with final art before a real 1.0 either way.
 
-## Open decisions
-- **License:** MIT (recommended default) vs other.
-- **Icon:** placeholder generated now, or wait for real art.
+## Open decisions — resolved
+- **License:** MIT ✅
+- **Icon:** placeholder generated now ✅ (real art before 1.0)
+- **Distribution:** unsigned (ad-hoc) for now ✅; notarised deferred
 
 ## Deferred review items (optional polish — none carry data-loss risk)
 Left out of the two commits on purpose; cost ≥ value at v1.0. Full detail is in
