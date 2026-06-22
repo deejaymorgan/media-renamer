@@ -152,6 +152,35 @@
        <b>Platform:</b> macOS 14 or later &nbsp;·&nbsp; <b>Reading time:</b> ~5 minutes</p>
   </header>
 
+  <!-- ============ GET THE APP ============ -->
+  <section class="step">
+    <h2>Get Media Renamer</h2>
+    <p>Download the latest build from the
+      <a href="https://github.com/deejaymorgan/media-renamer/releases/latest">Releases</a>
+      page — no Xcode needed. Open the <span class="mono">.dmg</span> and drag
+      <b>MediaRenamer</b> into your <b>Applications</b> folder (or unzip the
+      <span class="mono">.zip</span> and move the app there yourself).</p>
+    <div role="note" class="callout">
+      <p class="h">First launch only: clear Gatekeeper once</p>
+      <p>The app is signed but <b>not notarised</b> — it’s a free project with no paid
+        Apple Developer account — so macOS blocks the <em>first</em> open. Do it once and
+        it opens normally ever after. Pick whichever suits you (each assumes the app is in
+        <span class="mono">/Applications</span>):</p>
+      <dl class="kv">
+        <dt>Easiest — any macOS (one Terminal line)</dt>
+        <dd>Run <code>xattr -dr com.apple.quarantine /Applications/MediaRenamer.app</code>,
+          then double-click the app as usual.</dd>
+        <dt>No Terminal — macOS 15 Sequoia / macOS 26 Tahoe</dt>
+        <dd>Double-click once (it’s blocked — click <b>Done</b>), then open
+          <b>System Settings → Privacy &amp; Security</b>, scroll to <b>Security</b>, and
+          click <b>Open Anyway</b>; authenticate and confirm.</dd>
+        <dt>No Terminal — macOS 14 Sonoma</dt>
+        <dd>Control-click (right-click) the app → <b>Open</b> → <b>Open</b>. (Sonoma only —
+          don’t double-click first.)</dd>
+      </dl>
+    </div>
+  </section>
+
   <div role="note" class="callout safe">
     <p class="h">It’s safe to explore</p>
     <p>Choosing a folder only <em>previews</em> a plan — it reads names, it doesn’t touch your files.
