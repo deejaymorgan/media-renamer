@@ -5,7 +5,9 @@
 #
 # This is the no-credentials path (see notarize.sh for the paid, notarised path).
 # The result is NOT notarised, so on the recipient's Mac Gatekeeper will block it
-# on first launch — they open it once via right-click. See the printed notes.
+# on first launch — they clear it once (easiest on any macOS:
+# `xattr -dr com.apple.quarantine`, else System Settings -> Privacy & Security).
+# See the printed notes below for the exact, per-macOS-version steps.
 #
 # Note: "unsigned" here means ad-hoc signed (CODE_SIGN_IDENTITY="-"). A truly
 # unsigned binary will not launch on Apple Silicon; ad-hoc is the minimum.
@@ -64,17 +66,19 @@ cat <<NOTES
 Done. Share: $ZIP_PATH
 
 This build is ad-hoc signed and NOT notarised, so the first launch on someone
-else's Mac is blocked by Gatekeeper ("unidentified developer" / "Apple could not
-verify…"). Tell recipients to open it ONCE this way:
+else's Mac is blocked by Gatekeeper ("Apple could not verify…"). Recipients clear
+it ONCE (assuming the app is in /Applications):
 
-  • Control-click (right-click) MediaRenamer.app -> Open -> Open.
-    After the first time it opens normally on double-click.
-  • macOS 15 (Sequoia)+: if right-click->Open is refused, double-click once,
-    then System Settings -> Privacy & Security -> scroll down -> "Open Anyway".
-  • Terminal alternative (clears the download quarantine):
-      xattr -dr com.apple.quarantine /path/to/MediaRenamer.app
+  • Easiest, ANY macOS — one Terminal line, then double-click normally:
+      xattr -dr com.apple.quarantine /Applications/MediaRenamer.app
+  • macOS 15 Sequoia / macOS 26 Tahoe, no Terminal: double-click once (blocked ->
+    click Done), then System Settings -> Privacy & Security -> scroll to Security
+    -> "Open Anyway" -> authenticate. (Apple removed Control-click -> Open here.)
+  • macOS 14 Sonoma, no Terminal: Control-click MediaRenamer.app -> Open -> Open
+    (Sonoma only; don't double-click first — that path has no Open button).
 
-For a no-warning, double-click experience you need the paid path: a Developer ID
-certificate + notarisation via scripts/notarize.sh.
+After the first unlock it opens normally on double-click. For a no-warning
+experience you need the paid path: a Developer ID cert + notarisation
+(scripts/notarize.sh).
 ──────────────────────────────────────────────────────────────────────────────
 NOTES
