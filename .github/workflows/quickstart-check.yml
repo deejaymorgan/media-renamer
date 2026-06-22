@@ -1,0 +1,27 @@
+name: quickstart in sync
+
+# Fails if docs/quickstart.html was not rebuilt from its template.
+# Mirrors the local scripts/git-hooks/pre-commit check, but travels with the
+# repo and can't be bypassed with `git commit --no-verify`.
+
+on:
+  push:
+    paths:
+      - docs/quickstart.template.html
+      - docs/quickstart-assets/**
+      - docs/quickstart.html
+      - scripts/build-quickstart.py
+  pull_request:
+    paths:
+      - docs/quickstart.template.html
+      - docs/quickstart-assets/**
+      - docs/quickstart.html
+      - scripts/build-quickstart.py
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify quickstart.html is in sync with the template
+        run: python3 scripts/build-quickstart.py --check
