@@ -16,19 +16,22 @@ See [`SPEC.md`](SPEC.md) for the full design and roadmap.
 
 ## Screenshots & quick start
 
-A step-by-step walkthrough with screenshots lives in
-[`docs/quickstart.html`](docs/quickstart.html) (open it in a browser; a
-[PDF version](docs/quickstart.pdf) is also included).
+A step-by-step walkthrough with screenshots is at the
+**[Quick Start guide](https://deejaymorgan.github.io/media-renamer/)** (rendered
+via GitHub Pages). It also ships in the repo as
+[`docs/quickstart.html`](docs/quickstart.html), with a
+[PDF version](docs/quickstart.pdf).
 
 ## ⚠️ Safety
 
 This app **renames and moves your files** and sends unwanted "junk" to the macOS
-**Trash**. The preview is read-only and only **Apply** touches disk (it confirms
-first), but mistakes are still possible.
+**Trash**. The preview is read-only — only **Apply** touches disk, and it confirms
+first. Renaming never overwrites, and trashed files can be restored with Finder's
+**Put Back** — but treat Apply as a real, bulk filesystem operation and
+**run it on a copy of your media first**, until you trust the results.
 
-- **Run it on a copy of your media first**, until you trust the results.
-- Deletions go to the Trash (recoverable), not an unrecoverable delete — but
-  treat Apply as a real, bulk filesystem operation.
+Full safety notes are in the
+[Quick Start guide](https://deejaymorgan.github.io/media-renamer/).
 
 ## Requirements
 
@@ -72,13 +75,15 @@ SPEC.md        Full specification + roadmap.
 
 ## Status
 
-**Working app.** Pick a folder → preview the plan → edit titles, set acronym
-casing, choose which junk to trash, resolve duplicate versions → **Apply**
-(real renames + empty-folder cleanup + junk to the macOS Trash). The engine is
-parity-tested against the Python oracle (93 tests).
+**Working app.** Pick a folder, preview, and Apply real renames — with
+empty-folder cleanup and junk sent to the macOS Trash. The full walkthrough is in
+the [Quick Start guide](https://deejaymorgan.github.io/media-renamer/). The engine
+is covered by 105 tests, including a parity suite mirrored from the original
+Python oracle.
 
 Not built yet: undo UI, online title verification, and a *notarised* `.app`
-(unsigned ad-hoc packaging works today — see above; see the roadmap in `SPEC.md`).
+(unsigned ad-hoc packaging works today — see above; see the roadmap in
+[`SPEC.md`](SPEC.md)).
 
 ## License
 
