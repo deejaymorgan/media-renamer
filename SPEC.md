@@ -1,6 +1,6 @@
 # Media Renamer — Native macOS App Specification
 
-**Status:** MVP delivered, extending · **Updated:** 2026-05-31 · **Behavioural
+**Status:** v1.0 shipped, extending · **Updated:** 2026-06-22 · **Behavioural
 baseline:** an earlier (unpublished) Python engine (`renamer.py` + `data.py`)
 
 A native macOS app that restructures a folder of `.mkv` files (and subtitle
@@ -44,12 +44,12 @@ change best made as a clean rebuild, in the language the UI uses.
 - Remembered settings (recent acronym choices). **✅ acronyms persisted.**
 - Remaining north-star: **online title verification**, **undo last run**.
 - A clean engine/UI split, with the engine pure and headlessly testable. **✅**
-- Shippable as a double-click `.app` (eventually).
+- Shippable as a `.app`. **✅ unsigned build shipped** (notarised double-click-clean still to come).
 
 ### Non-Goals
 - Cross-platform support. **macOS only** — we lean on Foundation, the real
   Trash, and SwiftUI.
-- Multi-user / sharing / public release. Personal tool.
+- Multi-user / sharing / cloud sync. A single-user desktop tool.
 - Changing the renaming rules. Naming conventions, parsing, and output formats
   stay as specified by the Python baseline (the duplicate *resolver* is a new
   front-end capability layered on top — it does not change how a single file is
@@ -277,7 +277,7 @@ changes through identical code.
 ## 9. Testing
 
 - `swift test --package-path RenamerCore` runs the engine suite headlessly
-  (no Xcode, no display) — **91 tests across 11 suites**, the parity contract for
+  (no Xcode, no display) — **105 tests across 12 suites**, the parity contract for
   every rule.
 - New parsing/planning/execution code lands with mirrored cases from the Python
   `tests/test_renamer.py` oracle. The quality-tag and duplicate-resolve suites
