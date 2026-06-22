@@ -54,8 +54,8 @@ change best made as a clean rebuild, in the language the UI uses.
   stay as specified by the Python baseline (the duplicate *resolver* is a new
   front-end capability layered on top — it does not change how a single file is
   parsed or named).
-- Re-implementing logic outside Swift (no JS/Python port — the drift trap the
-  predecessor fell into).
+- Re-implementing logic outside Swift (no JS/Python port — a single source of
+  truth avoids parsing drift).
 
 ---
 
@@ -118,9 +118,8 @@ behind a confirmation dialog.
 - **Operations are recorded for undo.** `Executor` returns
   `ApplyResult.completedMoves`; the undo *engine hook* exists, the undo *UI* is
   not built yet (M6).
-- **Async off the main actor — a goal, not yet realised.** Apply is currently
-  synchronous (fine for typical folders); moving it off-main is a TODO for very
-  large trees.
+- **Async off the main actor — planned.** Apply runs synchronously (fine for
+  typical folders); moving it off-main is a TODO for very large trees.
 
 ### Native wins we take for free
 - `FileManager.trashItem(at:resultingItemURL:)` — real macOS Trash, with the
