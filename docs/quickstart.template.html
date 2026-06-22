@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>Media Renamer — Quick Start Guide</title>
 <style>
   :root{
@@ -11,7 +12,7 @@
     --accent:#2f6bed; --accent-ink:#1d4fb8; --accent-wash:#eef3fe;
     --tv:#3d7dd6; --movie:#a86bd6; --junk:#d08a2c; --conflict:#d6504b; --ok:#2e9e6b;
     --frame:#0e1014; --code:#f4f6fa; --code-ink:#243;
-    --maxtext:64ch;
+    --maxtext:80ch;
   }
   *{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%}
@@ -21,7 +22,8 @@
     -webkit-font-smoothing:antialiased;
   }
   .page{max-width:920px; margin:0 auto; padding:48px 28px 80px}
-  /* keep reading lines short, even though figures go full width */
+  /* reading column sits between the original 64ch measure and the full figure width;
+     lower --maxtext (e.g. 64ch) to narrow it, or set 'none' to match the figures exactly */
   p,li,.lead,.note p,figcaption,dd,dt,.callout p{max-width:var(--maxtext)}
   h1,h2,h3{line-height:1.25; letter-spacing:-.01em}
   h1{font-size:2.1rem; margin:0 0 6px}
@@ -62,7 +64,7 @@
   /* ---- steps ---- */
   .step{margin-top:2.6em}
   .step > h2{display:flex; align-items:center; gap:12px; margin-top:0}
-  .badge{flex:none; width:30px;height:30px;border-radius:50%; background:var(--ink); color:#fff;
+  .badge{flex:none; width:30px;height:30px;border-radius:50%; background:var(--ink); color:var(--bg);
      font-size:.95rem;font-weight:700; display:grid; place-items:center}
 
   /* ---- figures (screenshots) ---- */
@@ -109,6 +111,27 @@
     .pagebreak{break-before:page}
   }
   @media (max-width:560px){ .page{padding:32px 18px 60px} h1{font-size:1.7rem} }
+
+  /* ---- dark mode: follows the system appearance (screen only; print stays light) ----
+     Kept last in the sheet so it overrides the light defaults at equal specificity. */
+  @media screen and (prefers-color-scheme: dark){
+    :root{
+      --bg:#0e1116; --ink:#e7eaf0; --muted:#9aa4b2; --faint:#6b7686;
+      --line:#242a33; --line-strong:#333b47;
+      --accent:#5b8cff; --accent-ink:#8fb0ff; --accent-wash:#152134;
+      --tv:#5b95e0; --movie:#bd8ae6; --junk:#e0a458; --conflict:#e0635d; --ok:#3fb985;
+      --frame:#05070a; --code:#1a1f27; --code-ink:#cdd6e2;
+    }
+    .pat{background:#161b22}
+    kbd{background:#1a1f27; box-shadow:0 1px 0 rgba(0,0,0,.4)}
+    .callout.safe{background:#10241a}
+    .callout.warn{background:#241c0e}
+    .chip.tv{color:#9cc4ff;background:#172a44}
+    .chip.movie{color:#d7b3f5;background:#2a1d3d}
+    .chip.junk{color:#e8c07d;background:#332611}
+    .chip.dup{color:#f3a9a4;background:#3a1d1b}
+    .shot{box-shadow:0 8px 30px -12px rgba(0,0,0,.6), 0 2px 6px -2px rgba(0,0,0,.4)}
+  }
 </style>
 </head>
 <body>
