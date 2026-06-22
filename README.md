@@ -10,8 +10,6 @@ Pick a folder → preview the plan → tweak titles, set acronym casing, choose 
 junk to trash, resolve duplicate versions → **Apply**. Nothing on disk changes
 until you press Apply, and it asks for confirmation first.
 
-A ground-up Swift rebuild of an earlier (unpublished) Python CLI, which is kept
-privately only as the behavioural spec and test oracle — no Python ships here.
 See [`SPEC.md`](SPEC.md) for the full design and roadmap.
 
 ## Screenshots & quick start
@@ -22,7 +20,7 @@ via GitHub Pages.
 
 ## Download & run
 
-**No Xcode required.** Grab the latest build from the
+Grab the latest build from the
 [**Releases**](https://github.com/deejaymorgan/media-renamer/releases/latest) page:
 
 1. Download **`MediaRenamer-<version>.dmg`** (or the `.zip`) from the release **Assets**.
@@ -68,7 +66,7 @@ Full safety notes are in the
 ## Requirements
 
 - **To use it:** **macOS 14 (Sonoma) or later** (the app uses the Observation
-  framework). Just download a release (above) — no Xcode, no developer tools.
+  framework). Just download a release (above).
 - **To build it:** **Xcode 15+** for the app. The engine alone (`RenamerCore`)
   builds and tests with just the Swift toolchain — no Xcode app required.
 
@@ -108,14 +106,14 @@ SPEC.md        Full specification + roadmap.
 
 ## Status
 
-**Working app.** Pick a folder, preview, and Apply real renames — with
+Pick a folder, preview, and Apply real renames — with
 empty-folder cleanup and junk sent to the macOS Trash. The full walkthrough is in
 the [Quick Start guide](https://deejaymorgan.github.io/media-renamer/). The engine
-is covered by 105 tests, including a parity suite mirrored from the original
-Python oracle.
+is covered by 105 tests, including a regression suite that pins its parsing
+and planning behaviour.
 
 Not built yet: undo UI, online title verification, and a *notarised* `.app`
-(unsigned ad-hoc packaging works today — see above; see the roadmap in
+(unsigned ad-hoc packaging is available now — see above; see the roadmap in
 [`SPEC.md`](SPEC.md)).
 
 ## License

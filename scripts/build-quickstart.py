@@ -8,8 +8,8 @@ Usage:
   python3 scripts/build-quickstart.py            # regenerate docs/quickstart.html
   python3 scripts/build-quickstart.py --check    # exit 1 if it is stale (date ignored)
 
-No PDF is committed — the hosted HTML guide is canonical. If you need one, print
-the rendered page to PDF from a browser (the print CSS is intentionally light-only).
+The hosted HTML guide is canonical. To produce a PDF, print the rendered page
+from a browser (the print CSS is intentionally light-only).
 """
 from __future__ import annotations
 

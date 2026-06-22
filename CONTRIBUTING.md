@@ -34,7 +34,7 @@ a PR.
 - Keep the engine **Foundation-only** with no new dependencies. Logic that can
   live in `RenamerCore` (and be unit-tested there) should.
 - New parsing/planning/execution behaviour should land **with tests**. The engine
-  is parity-tested against the original Python oracle; mirror that style.
+  is parity-tested against the Python oracle; mirror that style.
 - Match the surrounding code: its naming, comment density, and idioms.
 - The preview is read-only — only **Apply** touches disk. Test on **copies** of
   real media, never your library.

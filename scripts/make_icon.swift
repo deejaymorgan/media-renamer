@@ -9,7 +9,7 @@
 //   swift scripts/make_icon.swift            # writes into the default iconset
 //   swift scripts/make_icon.swift <iconset>  # or an explicit .appiconset dir
 //
-// This is intentionally a placeholder; replace with real art before 1.0.
+// This is intentionally a placeholder; replace with final art.
 //
 import AppKit
 

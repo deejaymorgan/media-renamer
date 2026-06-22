@@ -170,7 +170,7 @@ final class AppModel {
     // MARK: Apply
 
     /// Trash approved junk, perform the renames, then re-scan the folder.
-    /// (Synchronous for now — fine for typical folders; move off-main if needed.)
+    /// (Synchronous — fine for typical folders; move off-main if it ever blocks.)
     func apply() {
         guard let plan, let folderURL else { return }
         lastResult = Executor.apply(plan, trashing: junkToTrash, using: SystemTrasher())
@@ -207,7 +207,7 @@ final class AppModel {
     }
 }
 
-/// The plan's nodes split into display buckets (same grouping the CLI uses).
+/// The plan's nodes split into the display buckets the sidebar shows.
 struct PlanGroups {
     let tvRename: [NodePlan]
     let movieRename: [NodePlan]
