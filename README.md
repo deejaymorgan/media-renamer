@@ -16,11 +16,9 @@ See [`SPEC.md`](SPEC.md) for the full design and roadmap.
 
 ## Screenshots & quick start
 
-A step-by-step walkthrough with screenshots is at the
-**[Quick Start guide](https://deejaymorgan.github.io/media-renamer/)** (rendered
-via GitHub Pages). It also ships in the repo as
-[`docs/quickstart.html`](docs/quickstart.html), with a
-[PDF version](docs/quickstart.pdf).
+A step-by-step walkthrough with screenshots is in the
+**[Quick Start guide](https://deejaymorgan.github.io/media-renamer/)**, rendered
+via GitHub Pages.
 
 ## Download & run
 

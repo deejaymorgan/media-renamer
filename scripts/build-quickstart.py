@@ -8,8 +8,8 @@ Usage:
   python3 scripts/build-quickstart.py            # regenerate docs/quickstart.html
   python3 scripts/build-quickstart.py --check    # exit 1 if it is stale (date ignored)
 
-The PDF (docs/quickstart.pdf) is produced separately by printing the page to
-PDF from a browser — it is intentionally light-only (see the print CSS).
+No PDF is committed — the hosted HTML guide is canonical. If you need one, print
+the rendered page to PDF from a browser (the print CSS is intentionally light-only).
 """
 from __future__ import annotations
 
