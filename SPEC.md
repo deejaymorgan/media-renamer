@@ -81,7 +81,7 @@ media-renamer/
       QualityTag.swift              # version-label parsing for the resolver (new — no oracle)
       Executor.swift                # apply moves + empty-dir cleanup; ApplyResult
       Trasher.swift                 # Trasher protocol + SystemTrasher (real macOS Trash)
-    Tests/RenamerCoreTests/         # swift test — mirrors the Python oracle (91 tests, 11 suites)
+    Tests/RenamerCoreTests/         # swift test — mirrors the Python oracle (105 tests, 12 suites)
   MediaRenamer/
     MediaRenamer.xcodeproj          # app target; links ../RenamerCore as a local package
     MediaRenamer/
