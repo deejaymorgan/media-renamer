@@ -1,0 +1,37 @@
+#!/bin/sh
+# Keep docs/quickstart.html in sync with its template.
+#
+# Enable in a clone with:
+#     git config core.hooksPath scripts/git-hooks
+#
+# Bypass once with:  git commit --no-verify
+set -eu
+
+repo_root=$(git rev-parse --show-toplevel)
+
+# Don't block commits on machines without python3 — just warn.
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "pre-commit: python3 not found — skipping quickstart freshness check" >&2
+  exit 0
+fi
+
+# 1) Working tree must be in sync (catches "edited the template, forgot to rebuild").
+if ! python3 "$repo_root/scripts/build-quickstart.py" --check; then
+  echo >&2
+  echo "pre-commit: rebuild and stage it:" >&2
+  echo "    python3 scripts/build-quickstart.py && git add docs/quickstart.html" >&2
+  exit 1
+fi
+
+# 2) If the source is staged, the generated output must be staged too
+#    (catches "rebuilt, but only git-added the template").
+staged=$(git diff --cached --name-only)
+src_staged=$(printf '%s\n' "$staged" | grep -E '^docs/quickstart\.template\.html$|^docs/quickstart-assets/' || true)
+out_staged=$(printf '%s\n' "$staged" | grep -xE 'docs/quickstart\.html' || true)
+if [ -n "$src_staged" ] && [ -z "$out_staged" ]; then
+  echo "pre-commit: the quickstart template/assets are staged but docs/quickstart.html is not." >&2
+  echo "    python3 scripts/build-quickstart.py && git add docs/quickstart.html" >&2
+  exit 1
+fi
+
+exit 0

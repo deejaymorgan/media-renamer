@@ -7,33 +7,34 @@
 <title>Media Renamer — Quick Start Guide</title>
 <style>
   :root{
-    --bg:#ffffff; --ink:#1c2230; --muted:#5a6573; --faint:#8a93a3;
+    --bg:#ffffff; --ink:#1c2230; --muted:#5a6573;
     --line:#e6e9ef; --line-strong:#d4d9e2;
-    --accent:#2f6bed; --accent-ink:#1d4fb8; --accent-wash:#eef3fe;
+    --accent:#2f6bed; --accent-ink:#1d4fb8; --accent-wash:#eef3fe; --accent-solid:#2f6bed;
     --tv:#3d7dd6; --movie:#a86bd6; --junk:#d08a2c; --conflict:#d6504b; --ok:#2e9e6b;
     --frame:#0e1014; --code:#f4f6fa; --code-ink:#243;
-    --maxtext:80ch;
+    --maxtext:72ch;
   }
   *{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%}
   body{
     margin:0; background:var(--bg); color:var(--ink);
     font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    -webkit-font-smoothing:antialiased;
+    -webkit-font-smoothing:antialiased; overflow-wrap:break-word;
   }
   .page{max-width:920px; margin:0 auto; padding:48px 28px 80px}
-  /* reading column sits between the original 64ch measure and the full figure width;
-     lower --maxtext (e.g. 64ch) to narrow it, or set 'none' to match the figures exactly */
-  p,li,.lead,.note p,figcaption,dd,dt,.callout p{max-width:var(--maxtext)}
+  /* reading column: ~72ch keeps prose in the comfortable 66–75-char band.
+     lower --maxtext to narrow it, or set 'none' to match the full-width figures.
+     figcaption is intentionally excluded so captions span their screenshot. */
+  p,li,.lead,.note p,dd,dt,.callout p{max-width:var(--maxtext)}
   h1,h2,h3{line-height:1.25; letter-spacing:-.01em}
   h1{font-size:2.1rem; margin:0 0 6px}
   h2{font-size:1.4rem; margin:2.4em 0 .5em}
-  h3{font-size:1.08rem; margin:1.8em 0 .4em}
+  h3{font-size:1.18rem; margin:1.8em 0 .4em}
   a{color:var(--accent-ink)}
-  code,kbd,.mono{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace}
+  a:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:3px}
+  code,.mono{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace}
+  .mono{overflow-wrap:anywhere}
   code{background:var(--code); padding:.12em .4em; border-radius:5px; font-size:.86em}
-  kbd{background:#fff;border:1px solid var(--line-strong);border-bottom-width:2px;border-radius:6px;
-      padding:.05em .45em;font-size:.82em;box-shadow:0 1px 0 rgba(0,0,0,.02)}
 
   /* ---- masthead ---- */
   header.mast{border-bottom:1px solid var(--line); padding-bottom:22px; margin-bottom:8px}
@@ -58,7 +59,7 @@
   ol.tldr{counter-reset:s; list-style:none; padding:0; margin:18px 0 0}
   ol.tldr li{counter-increment:s; position:relative; padding:6px 0 6px 42px; max-width:var(--maxtext)}
   ol.tldr li::before{content:counter(s); position:absolute; left:0; top:5px;
-     width:26px;height:26px;border-radius:50%; background:var(--accent); color:#fff;
+     width:26px;height:26px;border-radius:50%; background:var(--accent-solid); color:#fff;
      font-size:.8rem;font-weight:700; display:grid; place-items:center}
 
   /* ---- steps ---- */
@@ -72,7 +73,7 @@
   .shot{background:var(--frame); border:1px solid var(--line-strong); border-radius:14px;
         overflow:hidden; box-shadow:0 8px 30px -12px rgba(20,30,60,.32), 0 2px 6px -2px rgba(20,30,60,.16)}
   .shot img{display:block; width:100%; height:auto}
-  figcaption{font-size:.86rem; color:var(--muted); margin-top:10px; padding-left:2px}
+  figcaption{font-size:.86rem; color:var(--muted); margin-top:10px}
   figcaption b{color:var(--ink); font-weight:600}
 
   /* ---- tables ---- */
@@ -105,25 +106,25 @@
     .shot{box-shadow:none; border-color:#c7ccd6}
     figure, table, .callout{break-inside:avoid}
     h2{break-after:avoid}
+    p,li,dd,.lead,.callout p,figcaption{orphans:3; widows:3}
     .shot img{max-height:215mm; width:auto; max-width:100%; margin:0 auto}
     /* keep the dark screenshot frames and tints in the PDF */
     *{-webkit-print-color-adjust:exact; print-color-adjust:exact}
     .pagebreak{break-before:page}
   }
-  @media (max-width:560px){ .page{padding:32px 18px 60px} h1{font-size:1.7rem} }
+  @media (max-width:560px){ .page{padding:32px 18px 60px} h1{font-size:1.7rem} table{font-size:.86rem} th,td{padding:7px 8px} }
 
   /* ---- dark mode: follows the system appearance (screen only; print stays light) ----
      Kept last in the sheet so it overrides the light defaults at equal specificity. */
   @media screen and (prefers-color-scheme: dark){
     :root{
-      --bg:#0e1116; --ink:#e7eaf0; --muted:#9aa4b2; --faint:#6b7686;
+      --bg:#0e1116; --ink:#e7eaf0; --muted:#9aa4b2;
       --line:#242a33; --line-strong:#333b47;
-      --accent:#5b8cff; --accent-ink:#8fb0ff; --accent-wash:#152134;
+      --accent:#5b8cff; --accent-ink:#8fb0ff; --accent-wash:#152134; --accent-solid:#3a66d6;
       --tv:#5b95e0; --movie:#bd8ae6; --junk:#e0a458; --conflict:#e0635d; --ok:#3fb985;
       --frame:#05070a; --code:#1a1f27; --code-ink:#cdd6e2;
     }
     .pat{background:#161b22}
-    kbd{background:#1a1f27; box-shadow:0 1px 0 rgba(0,0,0,.4)}
     .callout.safe{background:#10241a}
     .callout.warn{background:#241c0e}
     .chip.tv{color:#9cc4ff;background:#172a44}
