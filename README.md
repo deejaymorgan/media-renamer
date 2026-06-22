@@ -22,6 +22,40 @@ via GitHub Pages). It also ships in the repo as
 [`docs/quickstart.html`](docs/quickstart.html), with a
 [PDF version](docs/quickstart.pdf).
 
+## Download & run
+
+**No Xcode required.** Grab the latest build from the
+[**Releases**](https://github.com/deejaymorgan/media-renamer/releases/latest) page:
+
+1. Download **`MediaRenamer-<version>.dmg`** (or the `.zip`) from the release **Assets**.
+2. Open the `.dmg` and **drag MediaRenamer into your Applications folder** (or, for
+   the `.zip`, unzip it and move `MediaRenamer.app` to Applications).
+3. **First launch only.** The app is *ad-hoc signed but not notarised* — it's a free
+   project with no paid Apple Developer account — so macOS Gatekeeper blocks the very
+   first open. Clear it **once** and it opens normally forever after. Pick whichever
+   suits you (all assume the app is in `/Applications` — adjust the path otherwise):
+
+   - **Easiest — any macOS, one Terminal line:**
+     ```sh
+     xattr -dr com.apple.quarantine /Applications/MediaRenamer.app
+     ```
+     Then double-click the app as usual — no prompts.
+   - **No Terminal — macOS 15 Sequoia / macOS 26 Tahoe:** double-click the app once
+     (it's blocked — click **Done**), then open **System Settings → Privacy &
+     Security**, scroll to **Security**, and click **Open Anyway** next to the
+     "_MediaRenamer was blocked…_" message. Authenticate, then click **Open**.
+   - **No Terminal — macOS 14 Sonoma:** **Control-click (right-click) the app → Open
+     → Open**. (Sonoma only, and don't double-click first — that path has no Open
+     button.)
+
+That's it — see the
+[Quick Start guide](https://deejaymorgan.github.io/media-renamer/) to learn the
+workflow.
+
+> **Why the warning?** Notarising would remove it, but that requires a paid Apple
+> Developer ID. The build is open-source and reproducible — you can also
+> [build it yourself](#build-from-source).
+
 ## ⚠️ Safety
 
 This app **renames and moves your files** and sends unwanted "junk" to the macOS
@@ -35,12 +69,12 @@ Full safety notes are in the
 
 ## Requirements
 
-- **macOS 14 (Sonoma) or later** (the app uses the Observation framework).
-- **Xcode 15+** to build and run the app.
-- The engine alone (`RenamerCore`) builds and tests with just the Swift
-  toolchain — no Xcode app required.
+- **To use it:** **macOS 14 (Sonoma) or later** (the app uses the Observation
+  framework). Just download a release (above) — no Xcode, no developer tools.
+- **To build it:** **Xcode 15+** for the app. The engine alone (`RenamerCore`)
+  builds and tests with just the Swift toolchain — no Xcode app required.
 
-## Run the app
+## Build from source
 
 Open `MediaRenamer/MediaRenamer.xcodeproj` in Xcode and press ⌘R. Preview is
 read-only; only **Apply** touches disk, and it confirms first. Try it on a copy.
@@ -49,13 +83,14 @@ read-only; only **Apply** touches disk, and it confirms first. Try it on a copy.
 
 ```sh
 ./scripts/package-unsigned.sh   # -> build/MediaRenamer-unsigned.zip (universal, ad-hoc)
+./scripts/make-dmg.sh           # -> build/MediaRenamer-<version>.dmg (drag-to-Applications)
 ```
 
 This needs no Apple Developer account. The app is **not notarised**, so on
-another Mac the first launch is blocked by Gatekeeper — open it once with
-**right-click → Open** (the script prints the exact steps). For a no-warning,
-double-click experience, get a paid Developer ID and run `scripts/notarize.sh`
-instead.
+another Mac the first launch is blocked by Gatekeeper — recipients clear it once
+(see [Download & run](#download--run) for the exact, current steps). For a
+no-warning, double-click experience, get a paid Developer ID and run
+`scripts/notarize.sh` instead.
 
 ## Test the engine
 
