@@ -176,7 +176,7 @@ struct SeasonInspectorView: View {
 struct SeasonResultingFiles: View {
     let slice: SeasonSlice
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("Resulting files").font(.subheadline).foregroundStyle(.secondary)
             FolderGroups(pairs: slice.pairs)
         }
@@ -214,7 +214,7 @@ struct AllModeView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 14) {
                 HStack {
                     Text("All items · \(items.count)").font(.headline)
                     Spacer()
@@ -248,7 +248,7 @@ struct AllCard: View {
     let toggle: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             Button(action: toggle) {
                 HStack(spacing: 8) {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
@@ -284,7 +284,7 @@ struct AllCard: View {
                     .lineLimit(1).truncationMode(.middle)
             }
         }
-        .padding(12)
+        .padding(14)
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 8))
     }
 }
@@ -335,7 +335,7 @@ private struct FolderBand: View {
             crumbText
         }
         .font(.callout)
-        .padding(.horizontal, 9).padding(.vertical, 5)
+        .padding(.horizontal, 10).padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
     }
@@ -382,14 +382,21 @@ private struct FolderGroup: View {
     let folder: String
     let pairs: [PreviewPair]
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 7) {
             if !folder.isEmpty { FolderBand(crumb: folder) }
-            VStack(alignment: .leading, spacing: 4) {
-                ForEach(Array(pairs.enumerated()), id: \.offset) { _, pair in
-                    PairRow(pair: pair)
+            // Indent the files under their folder band, with a guide rail, so
+            // each list reads as nested inside its destination folder.
+            HStack(alignment: .top, spacing: 14) {
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(.tertiary)
+                    .frame(width: 2)
+                VStack(alignment: .leading, spacing: 7) {
+                    ForEach(Array(pairs.enumerated()), id: \.offset) { _, pair in
+                        PairRow(pair: pair)
+                    }
                 }
             }
-            .padding(.leading, 6)
+            .padding(.leading, 16)
         }
     }
 }
@@ -407,7 +414,7 @@ struct FolderGroups: View {
 struct ResultingFiles: View {
     let node: NodePlan
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("Resulting files").font(.subheadline).foregroundStyle(.secondary)
             // TV iterates seasons in ascending order (each becomes its own band);
             // movies fall through to a single flat group.
