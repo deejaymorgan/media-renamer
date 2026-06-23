@@ -207,8 +207,9 @@ struct FlagBadges: View {
             if !node.junk.isEmpty {
                 badge("\(node.junk.count) junk", "trash", Palette.junk)
             }
-            if !node.verifyTitle.isEmpty {
+            if node.needsVerify {
                 badge(compact ? nil : "verify", "flag", Palette.verify)
+                    .help(node.verifyHint)
             }
         }
     }

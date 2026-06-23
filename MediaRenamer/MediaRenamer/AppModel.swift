@@ -308,4 +308,37 @@ extension NodePlan {
         }
         return out
     }
+
+    // MARK: - Title verify flag
+
+    /// True when the editable title carries a "joined" hyphen (letter-hyphen-
+    /// letter, e.g. `Spider-Man` or `The-Bear`). The engine preserves such
+    /// hyphens verbatim, but a scene release sometimes uses `-` as a word
+    /// separator (`the-bear` → `The-Bear`), so it's worth a human glance. The
+    /// spaced `" - "` the engine produces from a source colon is deliberately
+    /// excluded — it isn't suspect.
+    var titleHasJoinedHyphen: Bool {
+        editTitle.range(of: #"\S-\S"#, options: .regularExpression) != nil
+    }
+
+    /// The concrete, user-facing reasons the title is flagged — each a complete,
+    /// actionable sentence. Empty when nothing needs a look. Drives both the
+    /// badge tooltip and the inline note, so the flag is never unexplained.
+    var verifyReasons: [String] {
+        var reasons: [String] = []
+        if titleHasJoinedHyphen {
+            reasons.append("Kept a hyphen as-is — change it to a space if it was a word separator (e.g. “the-bear”).")
+        }
+        if !verifyWords.isEmpty {
+            let list = verifyWords.map { "“\($0)”" }.joined(separator: ", ")
+            reasons.append("Kept \(list) capitalized as in the source — title case usually lowercases such mid-title words, so confirm it reads right.")
+        }
+        return reasons
+    }
+
+    /// Whether to raise the orange verify flag.
+    var needsVerify: Bool { !verifyReasons.isEmpty }
+
+    /// Tooltip text for the badge (the reasons, one per line).
+    var verifyHint: String { verifyReasons.joined(separator: "\n") }
 }

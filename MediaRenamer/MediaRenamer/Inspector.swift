@@ -77,6 +77,26 @@ struct EditFields: View {
     }
 }
 
+/// In-context nudge under the title field, shown only when the engine made a
+/// title-casing choice worth a glance — a preserved joined hyphen (`the-bear`
+/// may have meant a space) or a kept source capital on a stopword (`Law And
+/// Order` vs `Law and Order`). Each reason is its own actionable line, so the
+/// flag is never unexplained. Renders nothing when there's nothing to verify.
+struct TitleVerifyNote: View {
+    let node: NodePlan
+    var body: some View {
+        if node.needsVerify {
+            VStack(alignment: .leading, spacing: 3) {
+                ForEach(node.verifyReasons, id: \.self) { reason in
+                    Label(reason, systemImage: "flag")
+                        .font(.caption2).foregroundStyle(Palette.verify)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Single-item inspector
 
 struct InspectorView: View {
@@ -100,10 +120,7 @@ struct InspectorView: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     EditFields(node: node, model: model).id(node.source)
-                    Text(node.mediaType == .tv
-                         ? "Title Case · hyphens preserved · applies to every season"
-                         : "Title Case · hyphens preserved")
-                        .font(.caption2).foregroundStyle(.secondary)
+                    TitleVerifyNote(node: node)
                 }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -154,6 +171,7 @@ struct SeasonInspectorView: View {
                     EditFields(node: node, model: model).id(node.source)
                     Text("Editing the title updates every season of this show.")
                         .font(.caption2).foregroundStyle(.secondary)
+                    TitleVerifyNote(node: node)
                 }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
