@@ -26,11 +26,17 @@ struct ContentView: View {
                 }
             }
 
+            // Acronym controls sit just above the apply bar, shown only when
+            // there are all-caps words to decide. A bottom sibling avoids the
+            // macOS 26 split-view safe-area bug that forced the old title-bar
+            // accessory (see AcronymTitlebar, now unused).
+            if !model.acronymWords.isEmpty {
+                Divider()
+                AcronymBar(model: model)
+            }
+            Divider()
             BottomBar(model: model) { confirming = true }
         }
-        // The acronym bar is a real title-bar accessory (see AcronymTitlebar), not
-        // a sibling view, so the detail content never underlaps it on macOS 26.
-        .background(AcronymTitlebar(model: model))
         .frame(minWidth: 960, minHeight: 640)
         .fileImporter(
             isPresented: $importing,
@@ -74,11 +80,11 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Summary chips (bottom bar, trailing)
+// MARK: - Summary chips (bottom bar, leading)
 
-/// The per-category plan breakdown, rendered as colour-coded chips that sit in
-/// the bottom bar beside Apply. Only non-empty categories show, so the row stays
-/// tight on small folders.
+/// The per-category plan breakdown, rendered as colour-coded chips at the
+/// leading edge of the bottom bar (Apply and the status note sit trailing). Only
+/// non-empty categories show, so the row stays tight on small folders.
 struct SummaryChips: View {
     let model: AppModel
 
@@ -125,15 +131,14 @@ struct BottomBar: View {
 
     var body: some View {
         HStack(spacing: 12) {
+            SummaryChips(model: model)
+            Spacer(minLength: 16)
+            Text(statusNote).font(.callout).foregroundStyle(.secondary)
             Button(action: onApply) {
                 Label("Apply renames", systemImage: "checkmark.circle.fill")
             }
             .buttonStyle(.borderedProminent)
             .disabled(!hasWork)
-
-            Text(statusNote).font(.callout).foregroundStyle(.secondary)
-            Spacer(minLength: 16)
-            SummaryChips(model: model)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
