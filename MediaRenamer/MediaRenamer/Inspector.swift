@@ -171,15 +171,14 @@ struct SeasonInspectorView: View {
     }
 }
 
-/// This season's resulting files (flat — already scoped to one season).
+/// This season's resulting files (already scoped to one season, so it renders a
+/// single destination-folder band over the two-column table).
 struct SeasonResultingFiles: View {
     let slice: SeasonSlice
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Resulting files").font(.subheadline).foregroundStyle(.secondary)
-            ForEach(Array(slice.pairs.enumerated()), id: \.offset) { _, pair in
-                PairRow(pair: pair)
-            }
+            FolderGroups(pairs: slice.pairs)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -292,17 +291,115 @@ struct AllCard: View {
 
 // MARK: - Shared blocks
 
-/// A single before→after pair, monospaced.
+/// Presentation helpers that split a before→after pair into the parts the
+/// resulting-files table shows separately: the destination folder (hoisted into
+/// a header band) and the bare filename (shown in a row), so the repeated
+/// `Show/Season N/` prefix appears once instead of on every line.
+private extension PreviewPair {
+    /// Slash-separated components of the destination (root-relative) path.
+    var newParts: [Substring] { new.split(separator: "/") }
+    /// Destination folder as a breadcrumb, e.g. "The Bear › Season 1"; "" when
+    /// the file lands at the root with no enclosing folder.
+    var destFolder: String { newParts.dropLast().joined(separator: " › ") }
+    /// Just the resulting filename.
+    var newFilename: String { String(newParts.last ?? Substring(new)) }
+    /// Just the original filename (any scene folder it sat in is dropped — the
+    /// full original path stays available as a tooltip on the row).
+    var oldFilename: String { String(old.split(separator: "/").last ?? Substring(old)) }
+    /// Row glyph: a caption bubble for subtitle sidecars, else a film cell.
+    var kindSymbol: String {
+        let ext = "." + (newFilename as NSString).pathExtension.lowercased()
+        return Constants.subtitleExtensions.contains(ext) ? "captions.bubble" : "film"
+    }
+}
+
+/// Groups pairs by their destination folder, preserving first-seen order.
+private func groupedByFolder(_ pairs: [PreviewPair]) -> [(folder: String, pairs: [PreviewPair])] {
+    var order: [String] = []
+    var byFolder: [String: [PreviewPair]] = [:]
+    for pair in pairs {
+        if byFolder[pair.destFolder] == nil { order.append(pair.destFolder) }
+        byFolder[pair.destFolder, default: []].append(pair)
+    }
+    return order.map { ($0, byFolder[$0]!) }
+}
+
+/// A tinted breadcrumb band marking the destination folder a group lands in.
+/// Folders read distinctly from the files beneath them: a filled folder glyph,
+/// a quaternary fill, and the show/season crumbs joined by a muted "›".
+private struct FolderBand: View {
+    let crumb: String
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "folder.fill").foregroundStyle(.blue)
+            crumbText
+        }
+        .font(.callout)
+        .padding(.horizontal, 9).padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
+    }
+
+    private var crumbText: Text {
+        crumb.components(separatedBy: " › ").enumerated().reduce(Text("")) { acc, part in
+            let sep = part.offset == 0 ? Text("") : Text(" › ").foregroundStyle(.tertiary)
+            return acc + sep + Text(part.element).foregroundStyle(.primary)
+        }
+    }
+}
+
+/// One before→after row: a file-kind glyph, the original filename (muted) on the
+/// left, an arrow, and the resulting filename (green) on the right. The two name
+/// columns split the row evenly so they line up into a table across rows.
 struct PairRow: View {
     let pair: PreviewPair
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(pair.new)
-                .font(.system(.body, design: .monospaced))
-                .foregroundStyle(Palette.renamed)         // new name
-            Text("← \(pair.old)")
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(.secondary)              // original name (muted)
+        HStack(spacing: 8) {
+            Image(systemName: pair.kindSymbol)
+                .font(.callout).foregroundStyle(.secondary)
+                .frame(width: 16)
+            Text(pair.oldFilename)
+                .font(.system(.callout, design: .monospaced))
+                .foregroundStyle(.secondary)
+                .lineLimit(1).truncationMode(.middle)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .help(pair.old)
+            Image(systemName: "arrow.right")
+                .font(.caption).foregroundStyle(.tertiary)
+            Text(pair.newFilename)
+                .font(.system(.callout, design: .monospaced))
+                .foregroundStyle(Palette.renamed)
+                .lineLimit(1).truncationMode(.middle)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .help(pair.new)
+        }
+    }
+}
+
+/// One destination folder: its breadcrumb band over the two-column table of the
+/// files that land in it.
+private struct FolderGroup: View {
+    let folder: String
+    let pairs: [PreviewPair]
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if !folder.isEmpty { FolderBand(crumb: folder) }
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(Array(pairs.enumerated()), id: \.offset) { _, pair in
+                    PairRow(pair: pair)
+                }
+            }
+            .padding(.leading, 6)
+        }
+    }
+}
+
+/// Renders each destination folder in `pairs` as its own `FolderGroup`.
+struct FolderGroups: View {
+    let pairs: [PreviewPair]
+    var body: some View {
+        ForEach(Array(groupedByFolder(pairs).enumerated()), id: \.offset) { _, group in
+            FolderGroup(folder: group.folder, pairs: group.pairs)
         }
     }
 }
@@ -312,20 +409,14 @@ struct ResultingFiles: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Resulting files").font(.subheadline).foregroundStyle(.secondary)
-            // TV shows list under per-season subheaders; movies stay flat.
+            // TV iterates seasons in ascending order (each becomes its own band);
+            // movies fall through to a single flat group.
             if node.mediaType == .tv, !node.seasonSlices.isEmpty {
                 ForEach(node.seasonSlices) { slice in
-                    Text("Season \(slice.number)")
-                        .font(.caption).fontWeight(.semibold)
-                        .foregroundStyle(.secondary).padding(.top, 2)
-                    ForEach(Array(slice.pairs.enumerated()), id: \.offset) { _, pair in
-                        PairRow(pair: pair)
-                    }
+                    FolderGroups(pairs: slice.pairs)
                 }
             } else {
-                ForEach(Array(node.previewPairs.enumerated()), id: \.offset) { _, pair in
-                    PairRow(pair: pair)
-                }
+                FolderGroups(pairs: node.previewPairs)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
