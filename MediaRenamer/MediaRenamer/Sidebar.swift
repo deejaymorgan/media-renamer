@@ -12,8 +12,13 @@ struct SidebarView: View {
                 AllItemsRow(count: g.tvRename.count + g.movieRename.count)
                     .tag(Selection.all)
 
-                if !g.tvRename.isEmpty {
-                    Section("TV") {
+                // The section also renders when the group is EMPTY but carries an
+                // explicit override — its header holds the only control that can
+                // clear it, and overrides outlive an Apply. Without this, applying
+                // a plan (which leaves every renamed node `.unchanged`) would hide
+                // a pinned override while it stayed in force.
+                if !g.tvRename.isEmpty || model.tvOverride != .inherit {
+                    Section {
                         ForEach(g.tvRename) { show in
                             ShowRow(node: show, conflicts: plan.conflicts,
                                     expanded: model.isShowExpanded(show.source),
@@ -31,20 +36,33 @@ struct SidebarView: View {
                                 }
                             }
                         }
+                    } header: {
+                        GroupModeHeader(title: "TV", type: .tv, model: model)
                     }
                 }
-                if !g.movieRename.isEmpty {
-                    Section("Movies") {
+                if !g.movieRename.isEmpty || model.movieOverride != .inherit {
+                    Section {
                         ForEach(g.movieRename) { node in
                             SidebarRow(node: node, conflicts: plan.conflicts)
                                 .tag(Selection.item(node.source))
                         }
+                    } header: {
+                        GroupModeHeader(title: "Movies", type: .movie, model: model)
                     }
                 }
                 if !g.unchanged.isEmpty {
                     Section("Unchanged") {
                         ForEach(g.unchanged) { node in
-                            MutedRow(name: node.originalName, detail: "already named")
+                            // A node pinned here BY an explicit layout override
+                            // stays selectable, so the setting that put it here can
+                            // be undone in place — the same reason the group
+                            // sections above survive an empty bucket.
+                            if model.hasSelectableRow(node) {
+                                PinnedRow(node: node)
+                                    .tag(Selection.item(node.source))
+                            } else {
+                                MutedRow(name: node.originalName, detail: "already named")
+                            }
                         }
                     }
                 }
@@ -70,6 +88,28 @@ struct SidebarView: View {
                 .padding(.vertical, 6)
                 .background(.bar)
             }
+        }
+    }
+}
+
+/// A sidebar section header carrying the group-level layout override for one
+/// media kind. Three states: an untouched group defers to the global rather than
+/// pinning a mode, so setting the toolbar picker still moves everything.
+struct GroupModeHeader: View {
+    let title: String
+    let type: MediaType
+    let model: AppModel
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(title)
+            Spacer(minLength: 6)
+            ModeOverrideMenu(
+                current: model.groupOverride(for: type),
+                inherited: model.globalMode,
+                set: { model.setGroupOverride($0, for: type) },
+                compact: true
+            )
         }
     }
 }
@@ -105,6 +145,7 @@ struct ShowRow: View {
                         .lineLimit(1).truncationMode(.middle)
                 }
                 Spacer(minLength: 4)
+                ModeBadge(mode: node.outputMode)
                 FlagBadges(node: node, conflicts: conflicts, compact: true)
             }
             .padding(.vertical, 2)
@@ -164,15 +205,43 @@ struct SidebarRow: View {
             Image(systemName: node.mediaType == .tv ? "tv" : "film")
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 1) {
-                Text(node.destinationDirectory)
+                // The title, not the destination folder: a flattened movie has no
+                // destination folder, and a row that silently switched to showing a
+                // filename would read as a different kind of thing in each mode.
+                Text(node.displayTitle)
                     .lineLimit(1).truncationMode(.middle)
-                    .help(node.destinationDirectory)
+                    .help(node.displayTitle)
                 Text(node.originalName)
                     .font(.caption).foregroundStyle(.secondary)
                     .lineLimit(1).truncationMode(.middle)
             }
             Spacer(minLength: 4)
+            ModeBadge(mode: node.outputMode)
             FlagBadges(node: node, conflicts: conflicts, compact: true)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+/// An `.unchanged` row that a deliberate layout override is holding in place —
+/// forcing organise mode onto an already-organised item leaves it nothing to do.
+/// Unlike its muted siblings it stays selectable and badged, so the override
+/// remains visible and reversible instead of quietly stranding the item.
+struct PinnedRow: View {
+    let node: NodePlan
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: node.mediaType == .tv ? "tv" : "film")
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(node.displayTitle)
+                    .lineLimit(1).truncationMode(.middle)
+                    .help(node.displayTitle)
+                Text("already named").font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 4)
+            ModeBadge(mode: node.outputMode, explicit: true)
         }
         .padding(.vertical, 2)
     }

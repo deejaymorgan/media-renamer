@@ -40,6 +40,26 @@ final class AppModel {
     /// Outcome of the most recent Apply.
     private(set) var lastResult: ApplyResult?
 
+    // MARK: Output mode (three-level cascade: item → group → global)
+
+    /// The global layout. **Rename-only at every launch, deliberately never
+    /// persisted** — a flattening default that silently survived a relaunch would
+    /// be exactly the surprise the mode guard exists to prevent. (The engine's own
+    /// default is `.organise`, which keeps every non-UI call site unchanged.)
+    private(set) var globalMode: OutputMode = .renameOnly
+    /// "All TV" / "all Movies" overrides — three-state, so an untouched group
+    /// defers to the global rather than pinning a mode.
+    private(set) var tvOverride: ModeOverride = .inherit
+    private(set) var movieOverride: ModeOverride = .inherit
+    /// Per-node overrides, keyed by source URL — the same key the title-edit and
+    /// disambiguation layers use, so it replays through `assemble` the same way.
+    private(set) var itemOverrides: [URL: ModeOverride] = [:]
+
+    private var cascade: ModeCascade {
+        ModeCascade(global: globalMode, tv: tvOverride, movies: movieOverride,
+                    items: itemOverrides)
+    }
+
     /// TV show nodes (keyed by source URL) whose season children are expanded in
     /// the sidebar. Reset to empty (all shows collapsed) when a folder is chosen.
     private(set) var expandedShows: Set<URL> = []
@@ -51,7 +71,22 @@ final class AppModel {
         }
     }
 
+    /// Pick a NEW folder. Clears the group and item mode overrides too — they were
+    /// decisions about the previous folder's contents. The *global* mode is a
+    /// per-launch setting and is deliberately not reset here.
     func choose(_ url: URL) {
+        tvOverride = .inherit
+        movieOverride = .inherit
+        itemOverrides = [:]
+        rescan(url)
+    }
+
+    /// Re-read the folder already loaded. The other edit layers reset as before;
+    /// mode overrides deliberately survive, because applying in several passes over
+    /// one folder (resolve a duplicate, apply, resolve the next) is the workflow
+    /// they were chosen for. This makes mode the only edit layer that outlives an
+    /// Apply — that asymmetry is intended, not an oversight.
+    private func rescan(_ url: URL) {
         folderURL = url
         keptJunk = []
         disambiguation = [:]
@@ -100,19 +135,95 @@ final class AppModel {
         return map
     }
 
+    // MARK: Output mode
+
+    func setGlobalMode(_ mode: OutputMode) {
+        guard mode != globalMode else { return }
+        globalMode = mode
+        rebuildPlan()
+    }
+
+    func groupOverride(for type: MediaType) -> ModeOverride {
+        type == .tv ? tvOverride : movieOverride
+    }
+
+    func setGroupOverride(_ override: ModeOverride, for type: MediaType) {
+        guard override != groupOverride(for: type) else { return }
+        if type == .tv { tvOverride = override } else { movieOverride = override }
+        rebuildPlan()
+    }
+
+    /// The item's own setting — `.inherit` when it defers to its group/global.
+    func itemOverride(for source: URL) -> ModeOverride {
+        itemOverrides[source] ?? .inherit
+    }
+
+    /// Set (or clear) one node's override. `.inherit` removes the entry rather than
+    /// storing a no-op, so the map only ever holds real decisions.
+    func setItemOverride(_ override: ModeOverride, for source: URL) {
+        guard override != itemOverride(for: source) else { return }
+        if override == .inherit { itemOverrides.removeValue(forKey: source) }
+        else { itemOverrides[source] = override }
+        rebuildPlan()
+    }
+
+    /// The mode a node would resolve to with no override of its own — what
+    /// "Inherit" means for that node, so the UI can name it instead of leaving the
+    /// default unexplained.
+    func inheritedMode(for node: NodePlan) -> OutputMode {
+        ModeCascade(global: globalMode, tv: tvOverride, movies: movieOverride)
+            .mode(for: node.source, mediaType: node.mediaType)
+    }
+
+    /// Whether the sidebar offers this node as a selectable row: everything being
+    /// renamed, plus an `.unchanged` node still pinned by an explicit override.
+    ///
+    /// That second case is not a nicety. Forcing organise mode onto an
+    /// already-organised item leaves it with nothing to do, which drops it out of
+    /// its section — taking the only control that could undo the choice with it.
+    /// Keeping the row reachable means an explicit setting is always reversible in
+    /// place, rather than only by re-picking the folder (which discards title
+    /// edits, junk keeps and duplicate resolutions).
+    func hasSelectableRow(_ node: NodePlan) -> Bool {
+        node.status == .rename
+            || (node.status == .unchanged && itemOverride(for: node.source) != .inherit)
+    }
+
     private func rebuildPlan() {
         guard let folderURL else { return }
-        // Build → resolve duplicates → re-apply manual title/year edits, so an
-        // edit survives an acronym-driven rebuild. The three-pass ordering lives
-        // in PlanBuilder.assemble (a pure, Foundation-only helper covered by
-        // RenamerCore tests); recording an edit only on a real change — so merely
-        // viewing a node can't pin a phantom edit and veto acronym toggles — is
-        // the UI-side guard in `replan` below.
+        // Build → stamp output modes → resolve duplicates → re-apply manual
+        // title/year edits, so an edit survives an acronym-driven rebuild. The
+        // four-pass ordering lives in PlanBuilder.assemble (a pure,
+        // Foundation-only helper covered by RenamerCore tests); recording an edit
+        // only on a real change — so merely viewing a node can't pin a phantom
+        // edit and veto acronym toggles — is the UI-side guard in `replan` below.
         let p = PlanBuilder.assemble(root: folderURL, acronyms: acronymMap,
+                                     cascade: cascade,
                                      disambiguation: disambiguation, titleEdits: titleEdits)
         plan = p
+        // A mode toggle can flip a node between .rename and .unchanged (a file
+        // already correctly named at the root has nothing to do in flat mode, but
+        // plenty to do in organise mode). Only rename nodes have a selectable
+        // sidebar row, so a selection left pointing at one that just changed status
+        // would leave the list with nothing highlighted while the inspector still
+        // showed it. Re-point instead of stranding.
+        if let current = selection, !isSelectable(current, in: p) { selection = nil }
         if selection == nil {
             selection = p.nodes.first(where: { $0.status == .rename }).map { .item($0.source) } ?? .all
+        }
+    }
+
+    /// Whether the sidebar has a row the selection can highlight.
+    private func isSelectable(_ selection: Selection, in plan: Plan) -> Bool {
+        switch selection {
+        case .all:
+            return true
+        case .item(let url):
+            return plan.nodes.first { $0.source == url }.map(hasSelectableRow) ?? false
+        case .season(let show, let number):
+            guard let node = plan.nodes.first(where: { $0.source == show }),
+                  node.status == .rename, node.isMultiSeason else { return false }
+            return node.seasonNumbers.contains(number)
         }
     }
 
@@ -173,9 +284,78 @@ final class AppModel {
     /// (Synchronous — fine for typical folders; move off-main if it ever blocks.)
     func apply() {
         guard let plan, let folderURL else { return }
-        lastResult = Executor.apply(plan, trashing: junkToTrash, using: SystemTrasher())
+        let result = Executor.apply(plan, trashing: junkToTrash, using: SystemTrasher())
+        lastResult = result
+        // Retire spent overrides BEFORE the re-scan, not after. An override is
+        // keyed by source URL, so once its node's files have moved the key names a
+        // path that no longer holds them — and a later item can end up at that same
+        // path, silently inheriting a layout nobody chose for it. Pruning first, on
+        // what actually moved, closes that; pruning afterwards would already have
+        // rebuilt the plan through the stale key.
+        //
+        // What survives is exactly what §5.2 keeps them for: nodes that did NOT
+        // move (skipped conflicts, unresolved duplicates), waiting for the next
+        // pass over the same folder.
+        let movedSources = Set(result.completedMoves.map(\.from))
+        let stationary = Set(plan.nodes
+            .filter { node in !node.units.contains { movedSources.contains($0.source) } }
+            .map(\.source))
+        itemOverrides = itemOverrides.filter { stationary.contains($0.key) }
+
         selection = nil
-        choose(folderURL)   // re-scan the now-renamed tree
+        // Re-scan the now-renamed tree through `rescan`, NOT `choose` — an Apply is
+        // not a new folder, so the mode overrides survive it (see `rescan`).
+        rescan(folderURL)
+        pruneItemOverrides()
+    }
+
+    /// Drop per-item overrides whose node no longer exists at all, so the map can't
+    /// grow without bound across repeated passes. Safe to run after the rebuild:
+    /// it only ever removes keys the fresh plan has no node for, which by
+    /// definition had no effect on that plan.
+    private func pruneItemOverrides() {
+        let live = Set(plan?.nodes.map(\.source) ?? [])
+        itemOverrides = itemOverrides.filter { live.contains($0.key) }
+    }
+
+    // MARK: The apply guard
+
+    /// The chosen folder's own name — what a flattened file's destination is
+    /// called, in the preview band and in the confirmation dialog.
+    var rootName: String { folderURL?.lastPathComponent ?? "" }
+
+    /// Files that will move, split by the layout they land in. Both numbers are
+    /// stated before Apply, so the active mode is never left to be inferred from
+    /// silence and a mixed plan names both shapes with equal weight.
+    var fileCountsByMode: (organise: Int, flat: Int) {
+        let renaming = plan?.nodes.filter { $0.status == .rename } ?? []
+        func files(_ mode: OutputMode) -> Int {
+            renaming.filter { $0.outputMode == mode }.reduce(0) { $0 + $1.previewPairs.count }
+        }
+        return (files(.organise), files(.renameOnly))
+    }
+
+    /// Whether the organised half of the plan contains TV, movies, or both — so
+    /// the dialog can name the tree it will actually build instead of reciting
+    /// both shapes and describing folders that will never exist.
+    var organisedKinds: (tv: Bool, movie: Bool) {
+        let organised = plan?.nodes.filter { $0.status == .rename && $0.outputMode == .organise } ?? []
+        return (organised.contains { $0.mediaType == .tv },
+                organised.contains { $0.mediaType == .movie })
+    }
+
+    /// Source folders that will be removed once emptied. The executor only removes
+    /// a folder that is genuinely empty at apply time, so this is an upper bound —
+    /// but it is the hardest part of a run to walk back, and it is invisible in the
+    /// preview, so it is named explicitly before Apply.
+    var folderRemovalCount: Int {
+        (plan?.nodes ?? [])
+            .filter { $0.status == .rename }
+            .reduce(0) { total, node in
+                total + node.operations.filter {
+                    if case .removeEmptyDirectory = $0 { return true } else { return false }
+                }.count
+            }
     }
 
     var lastResultSummary: String? {
@@ -236,17 +416,23 @@ struct SeasonSlice: Identifiable {
 extension NodePlan {
     var originalName: String { source.lastPathComponent }
 
-    var destinationDirectory: String {
-        guard let first = previewPairs.first else { return originalName }
-        let parts = first.new.split(separator: "/")
-        return parts.count > 1 ? parts.dropLast().joined(separator: "/") : first.new
-    }
-
     /// The label shown for the whole node: a TV show's name (seasons live below
-    /// it), or a movie's destination folder.
+    /// it) or a movie's `Title (Year)`. Derived from the editable fields rather
+    /// than from the destination path, so it reads identically in both output
+    /// modes — a flattened movie has no destination folder to name.
+    ///
+    /// The fields are put through the engine's own sanitisation first, because
+    /// this label is presented as the *result* (`AllCard` renders it after an
+    /// arrow). A title of `Mission: Impossible` lands on disk as
+    /// `Mission- Impossible`, and a cleared one as `Untitled`; showing anything
+    /// else here would advertise a name the plan will not produce.
     var displayTitle: String {
-        guard mediaType == .tv else { return destinationDirectory }
-        return editTitle.isEmpty ? originalName : editTitle
+        guard !units.isEmpty else { return originalName }   // skipped nodes have no plan
+        let safe = PlanBuilder.sanitizeSeparators(editTitle)
+        let title = (safe.isEmpty || safe.allSatisfy { $0 == "." }) ? "Untitled" : safe
+        guard mediaType != .tv else { return title }
+        let year = PlanBuilder.sanitizeSeparators(editYear)
+        return year.isEmpty ? title : "\(title) (\(year))"
     }
 
     /// Distinct season numbers in this node, ascending. Empty for movies.

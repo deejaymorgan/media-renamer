@@ -119,7 +119,10 @@ struct InspectorView: View {
                     .textSelection(.enabled)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    EditFields(node: node, model: model).id(node.source)
+                    HStack(alignment: .bottom, spacing: 14) {
+                        EditFields(node: node, model: model).id(node.source)
+                        ItemModeControl(node: node, model: model)
+                    }
                     TitleVerifyNote(node: node)
                 }
                 .padding(12)
@@ -129,12 +132,33 @@ struct InspectorView: View {
                 if node.isConflicted(in: conflicts) {
                     ConflictResolveSection(node: node, model: model)
                 } else {
-                    ResultingFiles(node: node)
+                    ResultingFiles(node: node, rootName: model.rootName)
                     if !node.junk.isEmpty { JunkList(node: node, model: model) }
                 }
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+/// The per-item layout override, sitting beside the title field — the item level
+/// of the cascade. Three states: `Inherit` names whichever mode the group/global
+/// currently supplies, so deferring never hides the outcome.
+struct ItemModeControl: View {
+    let node: NodePlan
+    let model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Layout").font(.caption).foregroundStyle(.secondary)
+            ModeOverrideMenu(
+                current: model.itemOverride(for: node.source),
+                inherited: model.inheritedMode(for: node),
+                set: { model.setItemOverride($0, for: node.source) },
+                compact: true
+            )
+            .padding(.bottom, 3)   // sit on the same baseline as the bordered fields
         }
     }
 }
@@ -168,8 +192,14 @@ struct SeasonInspectorView: View {
                     .font(.callout).foregroundStyle(.secondary)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    EditFields(node: node, model: model).id(node.source)
-                    Text("Editing the title updates every season of this show.")
+                    HStack(alignment: .bottom, spacing: 14) {
+                        EditFields(node: node, model: model).id(node.source)
+                        ItemModeControl(node: node, model: model)
+                    }
+                    // One override per show, never per season: flattening collapses
+                    // every season into the same folder, so a per-season setting
+                    // would change nothing visible.
+                    Text("Editing the title or layout updates every season of this show.")
                         .font(.caption2).foregroundStyle(.secondary)
                     TitleVerifyNote(node: node)
                 }
@@ -180,7 +210,8 @@ struct SeasonInspectorView: View {
                 if conflictedHere {
                     SeasonConflicts(node: node, slice: slice, model: model)
                 } else {
-                    SeasonResultingFiles(slice: slice)
+                    SeasonResultingFiles(slice: slice, mode: node.outputMode,
+                                         rootName: model.rootName)
                 }
             }
             .padding(20)
@@ -193,10 +224,13 @@ struct SeasonInspectorView: View {
 /// single destination-folder band over the two-column table).
 struct SeasonResultingFiles: View {
     let slice: SeasonSlice
+    var mode: OutputMode = .organise
+    var rootName: String = ""
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Resulting files").font(.subheadline).foregroundStyle(.secondary)
-            FolderGroups(pairs: slice.pairs)
+            FolderGroups(pairs: slice.pairs, mode: mode, rootName: rootName)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -278,6 +312,7 @@ struct AllCard: View {
                         .lineLimit(1).truncationMode(.tail)
                         .help(node.displayTitle)
                     Spacer()
+                    ModeBadge(mode: node.outputMode)
                     FlagBadges(node: node, conflicts: conflicts, compact: true)
                 }
                 .contentShape(Rectangle())
@@ -285,13 +320,16 @@ struct AllCard: View {
             .buttonStyle(.plain)
 
             // Always-editable fields (don't toggle the card).
-            EditFields(node: node, model: model).id(node.source)
+            HStack(alignment: .bottom, spacing: 14) {
+                EditFields(node: node, model: model).id(node.source)
+                ItemModeControl(node: node, model: model)
+            }
 
             if isExpanded {
                 if node.isConflicted(in: conflicts) {
                     ConflictResolveSection(node: node, model: model)
                 } else {
-                    ResultingFiles(node: node)
+                    ResultingFiles(node: node, rootName: model.rootName)
                     if !node.junk.isEmpty { JunkList(node: node, model: model) }
                 }
             } else {
@@ -345,17 +383,34 @@ private func groupedByFolder(_ pairs: [PreviewPair]) -> [(folder: String, pairs:
 /// A tinted breadcrumb band marking the destination folder a group lands in.
 /// Folders read distinctly from the files beneath them: a filled folder glyph,
 /// a quaternary fill, and the show/season crumbs joined by a muted "›".
+///
+/// A flattened group keeps the same band — same fill, same shape — and changes
+/// only its glyph and a muted tag. Dropping the band for flat items would make a
+/// mixed plan unreadable: every group has to state where it lands, or a flat
+/// group and an organised one look identical.
 private struct FolderBand: View {
     let crumb: String
+    var flattened = false
+
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: "folder.fill").foregroundStyle(.blue)
+            Image(systemName: flattened ? "tray.full.fill" : "folder.fill")
+                .foregroundStyle(flattened ? Palette.mode : .blue)
             crumbText
+            if flattened {
+                Text("flattened")
+                    .font(.caption2).foregroundStyle(.secondary)
+                    .padding(.horizontal, 5).padding(.vertical, 1)
+                    .background(.quaternary.opacity(0.6), in: Capsule())
+            }
         }
         .font(.callout)
         .padding(.horizontal, 10).padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
+        .help(flattened
+              ? "Rename only — these files land directly in “\(crumb)”, with no folder tree."
+              : "These files land in “\(crumb)”.")
     }
 
     private var crumbText: Text {
@@ -399,9 +454,20 @@ struct PairRow: View {
 private struct FolderGroup: View {
     let folder: String
     let pairs: [PreviewPair]
+    var mode: OutputMode = .organise
+    var rootName: String = ""
+
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            if !folder.isEmpty { FolderBand(crumb: folder) }
+            if !folder.isEmpty {
+                FolderBand(crumb: folder)
+            } else if mode == .renameOnly {
+                // No folder crumb *because* the files land at the root — name the
+                // chosen folder rather than showing a bare list, which would be
+                // indistinguishable from an organised group.
+                FolderBand(crumb: rootName.isEmpty ? "the chosen folder" : rootName,
+                           flattened: true)
+            }
             // Indent the files under their folder band, with a guide rail, so
             // each list reads as nested inside its destination folder.
             HStack(alignment: .top, spacing: 14) {
@@ -422,26 +488,35 @@ private struct FolderGroup: View {
 /// Renders each destination folder in `pairs` as its own `FolderGroup`.
 struct FolderGroups: View {
     let pairs: [PreviewPair]
+    var mode: OutputMode = .organise
+    var rootName: String = ""
+
     var body: some View {
         ForEach(Array(groupedByFolder(pairs).enumerated()), id: \.offset) { _, group in
-            FolderGroup(folder: group.folder, pairs: group.pairs)
+            FolderGroup(folder: group.folder, pairs: group.pairs,
+                        mode: mode, rootName: rootName)
         }
     }
 }
 
 struct ResultingFiles: View {
     let node: NodePlan
+    var rootName: String = ""
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Resulting files").font(.subheadline).foregroundStyle(.secondary)
-            // TV iterates seasons in ascending order (each becomes its own band);
-            // movies fall through to a single flat group.
-            if node.mediaType == .tv, !node.seasonSlices.isEmpty {
+            // Organised TV iterates seasons in ascending order (each becomes its
+            // own band); movies fall through to a single group. A flattened show
+            // takes that same single-group path on purpose: every season lands in
+            // the one folder, so per-season bands would repeat one destination.
+            if node.outputMode == .organise, node.mediaType == .tv, !node.seasonSlices.isEmpty {
                 ForEach(node.seasonSlices) { slice in
                     FolderGroups(pairs: slice.pairs)
                 }
             } else {
-                FolderGroups(pairs: node.previewPairs)
+                FolderGroups(pairs: node.previewPairs,
+                             mode: node.outputMode, rootName: rootName)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -81,6 +81,11 @@ public struct NodePlan: Equatable, Sendable, Identifiable {
     public var editYear: String
     /// Per-output-file data used to recompute destinations on edit.
     public var units: [RenameUnit]
+    /// The layout this node's files use, resolved from the cascade at build time
+    /// (`PlanBuilder.applyModes`). Everything downstream — destinations, the
+    /// preview, the sidebar, the confirmation dialog — reads this one field
+    /// rather than being handed three settings to re-resolve.
+    public var outputMode: OutputMode
 
     public var id: URL { source }
 
@@ -96,7 +101,8 @@ public struct NodePlan: Equatable, Sendable, Identifiable {
         verifyWords: [String] = [],
         editTitle: String = "",
         editYear: String = "",
-        units: [RenameUnit] = []
+        units: [RenameUnit] = [],
+        outputMode: OutputMode = .organise
     ) {
         self.source = source
         self.mediaType = mediaType
@@ -110,6 +116,7 @@ public struct NodePlan: Equatable, Sendable, Identifiable {
         self.editTitle = editTitle
         self.editYear = editYear
         self.units = units
+        self.outputMode = outputMode
     }
 }
 

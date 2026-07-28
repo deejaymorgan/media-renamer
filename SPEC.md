@@ -1,6 +1,6 @@
 # Media Renamer — Native macOS App Specification
 
-**Status:** v1.0 shipped, extending · **Updated:** 2026-06-22 · **Behavioural
+**Status:** v1.0 shipped, extending · **Updated:** 2026-07-28 · **Behavioural
 baseline:** an earlier (unpublished) Python engine (`renamer.py` + `data.py`)
 
 A native macOS app that restructures a folder of `.mkv` files (and subtitle
@@ -8,8 +8,10 @@ sidecars) into a Plex/Jellyfin-friendly tree. A ground-up rebuild of an existing
 Python CLI as a **SwiftUI** app on a **fresh Swift engine** — the Python project
 is kept only as the behavioural specification (the rules) and test oracle.
 
-- **TV:** `Show Name/Season N/Show Name S##E##.mkv`
-- **Movie:** `Movie Name (Year)/Movie Name (Year).mkv`
+Two output shapes, chosen per plan / per media kind / per item (§5, *Output modes*):
+
+- **Organise** — `Show Name/Season N/Show Name S##E##.mkv`, `Movie Name (Year)/Movie Name (Year).mkv`
+- **Rename only** — the identical filenames, directly in the chosen folder, no folder tree
 
 ---
 
@@ -51,9 +53,10 @@ change best made as a clean rebuild, in the language the UI uses.
   Trash, and SwiftUI.
 - Multi-user / sharing / cloud sync. A single-user desktop tool.
 - Changing the renaming rules. Naming conventions, parsing, and output formats
-  stay as specified by the Python baseline (the duplicate *resolver* is a new
-  front-end capability layered on top — it does not change how a single file is
-  parsed or named).
+  stay as specified by the Python baseline (the duplicate *resolver* and the
+  rename-only *output mode* are new front-end capabilities layered on top —
+  neither changes how a single file is parsed or named; rename-only produces
+  byte-identical filenames and only omits the folders around them).
 - Re-implementing logic outside Swift (no JS/Python port — a single source of
   truth avoids parsing drift).
 
@@ -68,6 +71,7 @@ media-renamer/
     Package.swift                   # swift-tools 6.0, .macOS(.v13), library RenamerCore
     Sources/RenamerCore/
       Constants.swift               # ported data tables (ext, tokens, langs, junk patterns)
+      OutputMode.swift              # OutputMode / ModeOverride / ModeCascade (new — no oracle)
       Patterns.swift                # compiled NSRegularExpressions + match helpers
       StringHelpers.swift           # Python-parity string ops (splitext, rstrip, …)
       MediaParse.swift              # MediaType, MediaParse
@@ -81,7 +85,7 @@ media-renamer/
       QualityTag.swift              # version-label parsing for the resolver (new — no oracle)
       Executor.swift                # apply moves + empty-dir cleanup; ApplyResult
       Trasher.swift                 # Trasher protocol + SystemTrasher (real macOS Trash)
-    Tests/RenamerCoreTests/         # swift test — mirrors the Python oracle (105 tests, 12 suites)
+    Tests/RenamerCoreTests/         # swift test — mirrors the Python oracle (132 tests, 16 suites)
   MediaRenamer/
     MediaRenamer.xcodeproj          # app target; links ../RenamerCore as a local package
     MediaRenamer/
@@ -91,6 +95,7 @@ media-renamer/
       Sidebar.swift                 # source list (All / TV / Movies / Unchanged / Skipped) + flag badges
       Inspector.swift               # detail: editable fields, results, junk toggles, conflict resolver
       AcronymBar.swift              # acronym keep/Title chips
+      OutputModeUI.swift            # mode vocabulary + badge, global picker, override menu
       Assets.xcassets
   SPEC.md  README.md  .gitignore
 ```
@@ -142,7 +147,7 @@ behind a confirmation dialog.
 | Min OS | Engine package: macOS 13+. App deployment target: **macOS 14.0** (`MACOSX_DEPLOYMENT_TARGET = 14.0`, required by the Observation framework) |
 | Tests | Swift Testing (`swift test`) — engine only, no Xcode needed |
 | Trash | `FileManager.trashItem` (via `SystemTrasher`) |
-| Settings | `UserDefaults` (acronym modes persisted) |
+| Settings | `UserDefaults` (acronym modes persisted; the **output mode deliberately is not** — see §5) |
 | Online lookup (goal) | TMDb/TVDB REST + local cache (opt-in) |
 | Packaging (later) | Xcode → notarised `.app` |
 | Sandbox | **Off** (`ENABLE_APP_SANDBOX = NO`) for personal use; revisit for App Store |
@@ -184,6 +189,30 @@ Verbatim behaviour from the earlier Python engine, pinned by parity tests:
   Two loose copies of one title group together and still surface as a duplicate
   for the version-label resolver.
 - **Library folders** (`Movies/Music/TV`) and hidden/metadata files are ignored.
+- **Output modes (new — beyond the CLI; the CLI always built folders):** every
+  node carries a resolved `outputMode`, stamped once at build time from a
+  three-level cascade — **item → group ("all TV" / "all Movies") → global**,
+  nearest explicit setting winning. `organise` is the tree above; `renameOnly`
+  puts the **identical filename** directly in the chosen root and builds nothing.
+  Only the containing path differs: `computeDestination` composes the name once
+  and both branches place that one string, which is why **flattening creates no
+  new class of collision** — the destination folder never disambiguates anything
+  the filename doesn't already carry (for TV the season folder is derived from the
+  episode code in the name; for movies the folder *is* the name's stem). One
+  resolver, one conflict checker, both modes. A single plan may hold both shapes
+  at once. Files inside subfolders are lifted to the root and every vacated
+  directory is offered for removal, deepest first (`Executor` removes only a
+  genuinely empty one). One override per show, never per season — flattening
+  collapses the seasons into the same folder anyway.
+  - **Rename-only is the app's default at every launch and is deliberately never
+    persisted**; the engine's own default stays `organise` so non-UI call sites
+    are unchanged. Group and item overrides reset when a new folder is chosen but
+    **survive an Apply** — the only edit layer that does — because applying in
+    several passes over one staging folder is the workflow they serve.
+  - Because the default flattens, the active mode is stated in the toolbar, on
+    each preview group's destination band, and in the confirmation dialog (which
+    also counts the source folders that will disappear) — with **equal weight in
+    both directions**, so neither mode is the one you click through.
 
 **Status:** the engine and the app are both built. The app delivers preview,
 editable titles/years, acronym casing, junk→Trash, real apply (moves +
@@ -205,6 +234,9 @@ features beyond the original MVP line:
 - **Apply:** real renames + empty-source cleanup + junk to the Trash, behind a
   confirm dialog, with a result summary; the folder re-scans afterward.
 - **Duplicate-version resolver** (beyond the original MVP scope).
+- **Output modes:** organise vs rename-only, with a three-level cascade
+  (toolbar / sidebar section headers / inspector), mode badges on rows, a
+  destination band on every preview group, and a mode-naming confirm dialog.
 
 Not yet: undo UI, online verification, a broader settings surface, packaging.
 
@@ -223,6 +255,25 @@ is a no-op rather than a re-flagged conflict.
 - **Loose sidecars aren't grouped.** Loose-file grouping collects videos only; a
   subtitle sitting loose at the root (not inside a folder) is still listed as an
   individual skipped entry rather than following its grouped video.
+- **Skipped on-disk items aren't in the conflict index.** `ConflictChecker` keys
+  on the destinations the *plan* carries — move targets plus in-place units — so
+  an item the plan skipped (a loose non-video file, an unrecognised folder) that
+  already occupies a destination path is not flagged. The preview shows the
+  rename; `Executor` then refuses to overwrite, skips that one file, and reports
+  *"Skipped (target exists)"* in the result summary. Nothing is lost, but the
+  preview was optimistic and the resolver isn't offered. Pre-existing and
+  mode-independent — verified in both modes — though **rename-only widens it**,
+  because every flat destination lands in the root, which is exactly where loose
+  skipped files accumulate. A fix means indexing non-planned residents *and*
+  giving the resolver a way to label a file it isn't renaming; that is a
+  conflict-system change, deliberately not made alongside the output modes.
+- **Cleanup only follows files that move.** An emptied source folder (and every
+  directory a moved file is lifted out of) is offered for removal, deepest first.
+  A subdirectory that no planned file leaves — one holding only junk, or only
+  skipped files — is not, so trashing its contents can leave an empty directory
+  behind, which in turn keeps its parent. `Executor` only ever removes a
+  genuinely empty directory, so this is litter rather than risk, and it keeps the
+  confirmation dialog's folder count from overstating what will actually go.
 - **macOS 26 chrome.** Resolved. The summary counts moved out of the toolbar
   into colour-coded chips in the bottom bar, and the acronym bar is now a real
   title-bar accessory (`NSTitlebarAccessoryViewController`) so the inspector
@@ -243,6 +294,7 @@ is a no-op rather than a re-flagged conflict.
 | **M5 — Editable titles** | ✅ live re-plan on title/year edits; acronyms remembered |
 | **M5.5 — Duplicate resolver** | ✅ version-label resolution (new capability beyond the CLI) |
 | **M5.6 — Loose-file grouping** | ✅ scattered same-show (and movie-version) loose files group like a subfolder; merge into a matching subfolder; seasons shown as a sidebar Show → Season tree |
+| **M5.7 — Output modes** | ✅ rename-only (flat) alongside organise, chosen per plan / per media kind / per item; mode surfaced in the toolbar, rows, preview bands, and the confirm dialog |
 | **M6 — Undo** | ⬜ reverse the last applied batch (engine records moves; UI pending) |
 | **M7 — Online verify** | ⬜ opt-in TMDb/TVDB confirmation + cache |
 | **M8 — Package** | ⬜ notarised `.app`, app icon, double-click launch |
@@ -256,9 +308,17 @@ Parity with the old CLI was reached at **M4**; everything after is new capabilit
 
 - `MediaType` — `.tv / .movie / .unknown`.
 - `MediaParse` — parsed fields (title, episode code, season, preserved stopwords).
+- `OutputMode` — `.organise / .renameOnly`, the layout a node's files land in.
+- `ModeOverride` — `.inherit / .organise / .renameOnly`; `forced` is the single
+  place `inherit` becomes a decision.
+- `ModeCascade` — `global` + `tv`/`movies` group overrides + per-source `items`;
+  `mode(for:mediaType:)` resolves one node. Stored by the app, resolved by the
+  engine.
 - `NodePlan` — one top-level entry's plan: `source`, `mediaType`, `status`
   (`.rename / .unchanged / .skip`), `operations`, `junk`, `previewPairs`,
-  verify info, the editable `editTitle`/`editYear`, and `units`.
+  verify info, the editable `editTitle`/`editYear`, `units`, and the resolved
+  `outputMode` (everything downstream reads this one field rather than
+  re-resolving three settings).
 - `RenameUnit` — one output file (a video or one of its sidecars): `episodeCode`,
   `season`, `languageSuffix`, `ext`, and `disambiguationSuffix` (the resolver's
   version label). Carries just enough to recompute its destination on an edit.
@@ -277,11 +337,18 @@ changes through identical code.
 ## 9. Testing
 
 - `swift test --package-path RenamerCore` runs the engine suite headlessly
-  (no Xcode, no display) — **105 tests across 12 suites**, the parity contract for
+  (no Xcode, no display) — **132 tests across 16 suites**, the parity contract for
   every rule.
 - New parsing/planning/execution code lands with mirrored cases from the Python
-  `tests/test_renamer.py` oracle. The quality-tag and duplicate-resolve suites
-  are **new** (no oracle — the Python CLI only detects and skips conflicts).
+  `tests/test_renamer.py` oracle. The quality-tag, duplicate-resolve and
+  output-mode suites are **new** (no oracle — the Python CLI only detects and
+  skips conflicts, and always built folders).
+- The four output-mode suites are `FlatDestinationTests` (the flat shape, and
+  that the filename is byte-identical in both modes), `ModeCascadeTests` (pure
+  item → group → global resolution), `ModeEquivalenceTests` (the conflicted-source
+  set is identical under both modes across a fixture table — the property the
+  design rests on) and `ModeReplayTests` (the mode composes with acronyms,
+  labels and title edits, and survives a rebuild).
 - SwiftUI views stay thin; logic lives in the testable engine. UI tests are
   post-MVP.
 

@@ -14,26 +14,49 @@ public enum PlanBuilder {
     }
 
     /// Assemble a full plan the way the app's rebuild does, in one place: build
-    /// from `root` with the given acronym map, apply version-label
-    /// disambiguation, then re-apply manual title/year edits (each keyed by a
-    /// node's source URL). Sharing this ordering between the UI and tests is what
-    /// lets a manual title edit survive an acronym-map change, which rebuilds the
-    /// whole plan from scratch — `disambiguation`/`titleEdits` are re-applied on
-    /// top exactly as they were the first time.
+    /// from `root` with the given acronym map, stamp each node's output mode from
+    /// the cascade, apply version-label disambiguation, then re-apply manual
+    /// title/year edits (each keyed by a node's source URL). Sharing this ordering
+    /// between the UI and tests is what lets a manual title edit survive an
+    /// acronym-map change, which rebuilds the whole plan from scratch —
+    /// `cascade`/`disambiguation`/`titleEdits` are re-applied on top exactly as
+    /// they were the first time.
+    ///
+    /// **The mode is stamped first, and that ordering is not arbitrary.** Both
+    /// `resolve` and `replan` go through `recompute`, which builds destinations
+    /// and therefore must already know each node's layout. Stamping first means
+    /// every later layer recomputes against the correct shape.
     ///
     /// Each edit targets its own node and every `replan` re-detects conflicts
     /// across the full plan, so the iteration order over `titleEdits` does not
     /// affect the result.
     public static func assemble(root: URL,
                                 acronyms: [String: String] = [:],
+                                cascade: ModeCascade = ModeCascade(),
                                 disambiguation: [URL: String] = [:],
                                 titleEdits: [URL: (title: String, year: String)] = [:]) -> Plan {
         var p = plan(root: root, acronyms: acronyms)
+        p = applyModes(p, cascade: cascade)
         if !disambiguation.isEmpty { p = resolve(p, suffixes: disambiguation) }
         for (src, edit) in titleEdits {
             p = replan(p, itemSource: src, title: edit.title, year: edit.year)
         }
         return p
+    }
+
+    /// Stamp each node with its mode resolved from `cascade` (item → group →
+    /// global, nearest explicit setting winning) and recompute the nodes whose
+    /// mode actually changed. Skip nodes and nodes with no output files have no
+    /// destinations to lay out, so they are left alone.
+    public static func applyModes(_ plan: Plan, cascade: ModeCascade) -> Plan {
+        var nodes = plan.nodes
+        for i in nodes.indices where nodes[i].status != .skip && !nodes[i].units.isEmpty {
+            let mode = cascade.mode(for: nodes[i].source, mediaType: nodes[i].mediaType)
+            guard nodes[i].outputMode != mode else { continue }
+            nodes[i].outputMode = mode
+            nodes[i] = recompute(nodes[i], root: plan.root)
+        }
+        return Plan(root: plan.root, nodes: nodes, conflicts: ConflictChecker.detect(in: nodes))
     }
 
     /// Node plans for `root`. Subfolders and unrecognised loose files keep their
@@ -152,14 +175,17 @@ public enum PlanBuilder {
 
     /// Rebuild a node's preview pairs and move operations from its current
     /// `units` (each carrying its own episode code, season, language, and
-    /// disambiguation suffix) and the node's current `editTitle`/`editYear`.
-    /// Non-move operations (empty-source cleanup) are preserved, in order.
+    /// disambiguation suffix) and the node's current `editTitle`/`editYear`/
+    /// `outputMode`. The empty-source cleanup is re-derived, not carried over.
+    /// This is the single place a node's destinations are built — both the initial
+    /// build (`planFolder`) and every later edit come through here.
     private static func recompute(_ node: NodePlan, root: URL) -> NodePlan {
         var updated = node
         var pairs: [PreviewPair] = []
         var ops: [Operation] = []
         for unit in node.units {
-            let dst = computeDestination(unit, title: node.editTitle, year: node.editYear, root: root)
+            let dst = computeDestination(unit, title: node.editTitle, year: node.editYear,
+                                         root: root, mode: node.outputMode)
             pairs.append(PreviewPair(old: relativePath(unit.source, from: root),
                                      new: relativePath(dst, from: root)))
             if unit.source.path != dst.path { ops.append(.move(from: unit.source, to: dst)) }
@@ -167,13 +193,8 @@ public enum PlanBuilder {
         // Re-derive the empty-source-folder cleanup from the CURRENT title/year
         // rather than preserving the build-time op: a title/year edit moves the
         // destination folder, so a source folder that *was* the destination may no
-        // longer be (and would otherwise be orphaned), or vice-versa. Only
-        // folder-backed nodes have a source directory to clean up; loose nodes don't.
-        if Scanner.isDirectory(node.source),
-           node.source.standardizedFileURL.path
-             != destinationFolder(node, root: root).standardizedFileURL.path {
-            ops.append(.removeEmptyDirectory(node.source))
-        }
+        // longer be (and would otherwise be orphaned), or vice-versa.
+        ops += cleanupOperations(for: node, moves: ops, root: root)
 
         updated.previewPairs = pairs
         updated.operations = ops
@@ -181,9 +202,62 @@ public enum PlanBuilder {
         return updated
     }
 
+    /// The source directories a node vacates, deepest first — its own folder plus
+    /// every intermediate directory a moved file is being lifted out of.
+    ///
+    /// `Scanner.scanContents` walks a source folder recursively, so a node's files
+    /// can sit several levels down (`Show/Season 1/ep.mkv`). Removing only the top
+    /// folder would leave it holding an empty `Season 1/`, and `Executor` — which
+    /// removes a directory only when it is genuinely empty — would then silently
+    /// decline to remove the top folder either. Rename-only makes that shape common
+    /// (an already-organised tree is exactly what a user flattens), but the litter
+    /// is not mode-specific, so neither is the fix.
+    ///
+    /// Deepest-first ordering matters: the ops run in sequence, so an inner
+    /// directory must be emptied before its parent is tested for emptiness.
+    /// Only folder-backed nodes have a source directory to clean up; a loose node's
+    /// source is a file. Every entry is still just a *candidate* — `Executor` keeps
+    /// any directory that still holds kept junk or a skipped file.
+    private static func cleanupOperations(for node: NodePlan, moves: [Operation],
+                                          root: URL) -> [Operation] {
+        guard Scanner.isDirectory(node.source) else { return [] }
+        let sourcePath = node.source.standardizedFileURL.path
+        var dirs: Set<String> = []
+
+        // Intermediate directories: walk up from each moved file's parent until we
+        // reach the node's own folder. A file that isn't moving doesn't vacate its
+        // directory, and neither does one moving *deeper into* it — an
+        // organise-mode rename in place stays put, so its directory is not offered.
+        for case let .move(from, to) in moves {
+            let landing = to.deletingLastPathComponent().standardizedFileURL.path
+            var dir = from.deletingLastPathComponent().standardizedFileURL
+            while dir.path.hasPrefix(sourcePath + "/") {
+                if landing != dir.path && !landing.hasPrefix(dir.path + "/") {
+                    dirs.insert(dir.path)
+                }
+                dir = dir.deletingLastPathComponent()
+            }
+        }
+        // The node's own folder, unless it *is* where the files are landing.
+        if sourcePath != destinationFolder(node, root: root).standardizedFileURL.path {
+            dirs.insert(sourcePath)
+        }
+
+        // Deepest first, then alphabetically — a total order, so a plan (and the
+        // count the confirmation dialog quotes) is reproducible run to run.
+        return dirs
+            .map(URL.init(fileURLWithPath:))
+            .sorted {
+                $0.pathComponents.count != $1.pathComponents.count
+                    ? $0.pathComponents.count > $1.pathComponents.count
+                    : $0.path < $1.path
+            }
+            .map { .removeEmptyDirectory($0) }
+    }
+
     /// Recompute a node's destinations from an edited title/year. Season and
     /// episode codes stay fixed per file; only the title (and, for movies, the
-    /// year) change. Non-move operations (empty-source cleanup) are preserved.
+    /// year) change. The empty-source cleanup is re-derived from the new state.
     public static func replan(_ node: NodePlan, title: String, year: String, root: URL) -> NodePlan {
         guard node.status != .skip, !node.units.isEmpty else { return node }
         var updated = node
@@ -283,7 +357,8 @@ public enum PlanBuilder {
             plan.verifyWords = parse.preservedStopwords
         }
 
-        let dst = computeDestination(unit, title: title, year: year, root: root)
+        let dst = computeDestination(unit, title: title, year: year,
+                                     root: root, mode: plan.outputMode)
         plan.previewPairs = [PreviewPair(old: relativePath(path, from: root),
                                          new: relativePath(dst, from: root))]
         if path.path == dst.path {
@@ -377,21 +452,11 @@ public enum PlanBuilder {
             plan.verifyWords = allPreserved
         }
 
-        for unit in units {
-            let dst = computeDestination(unit, title: editTitle, year: editYear, root: root)
-            if unit.source.path != dst.path { plan.operations.append(.move(from: unit.source, to: dst)) }
-            plan.previewPairs.append(PreviewPair(old: relativePath(unit.source, from: root),
-                                                 new: relativePath(dst, from: root)))
-        }
-
-        // Remove the now-empty source folder (unless it *is* the destination).
-        if folder.standardizedFileURL.path
-             != destinationFolder(plan, root: root).standardizedFileURL.path {
-            plan.operations.append(.removeEmptyDirectory(folder))
-        }
-
-        if !plan.operations.contains(where: \.isMove) { plan.status = .unchanged }
-        return plan
+        // Destinations, preview pairs, and the emptied-source cleanup are all
+        // derived from the units and the node's title/year/mode — which is exactly
+        // what `recompute` does, so build them there rather than keeping a second
+        // copy of that logic in step with it.
+        return recompute(plan, root: root)
     }
 
     // MARK: - Helpers
@@ -403,7 +468,13 @@ public enum PlanBuilder {
     /// A non-empty `disambiguationSuffix` is rendered as ` - <tag>` on the
     /// filename only — the containing folder is unchanged, so multiple versions
     /// share one `Title (Year)/` folder (Plex/Jellyfin treat them as versions).
-    static func computeDestination(_ unit: RenameUnit, title: String, year: String, root: URL) -> URL {
+    ///
+    /// In `.renameOnly` mode the same filename lands **directly in `root`** with
+    /// no folder tree. The name is computed once and both branches place that one
+    /// string, so the two modes are byte-identical on the filename — which is why
+    /// flattening introduces no new class of collision.
+    static func computeDestination(_ unit: RenameUnit, title: String, year: String,
+                                   root: URL, mode: OutputMode = .organise) -> URL {
         // Titles, years, and version labels can be edited freely in the UI, so a
         // stray `/`, `:`, or a bare `..` must never escape the chosen root or
         // split a name across directories. Sanitise every user-entered piece
@@ -412,24 +483,37 @@ public enum PlanBuilder {
         let suffix = tag.isEmpty ? "" : " - \(tag)"
         let safeTitle = pathComponentSafe(title, fallback: "Untitled")
         if let code = unit.episodeCode, let season = unit.season {
-            return root.appendingPathComponent(safeTitle)
-                .appendingPathComponent("Season \(season)")
-                .appendingPathComponent("\(safeTitle) \(code)\(suffix)\(unit.languageSuffix)\(unit.ext)")
+            let name = "\(safeTitle) \(code)\(suffix)\(unit.languageSuffix)\(unit.ext)"
+            switch mode {
+            case .renameOnly: return root.appendingPathComponent(name)
+            case .organise:   return root.appendingPathComponent(safeTitle)
+                                  .appendingPathComponent("Season \(season)")
+                                  .appendingPathComponent(name)
+            }
         } else {
             // A cleared year drops the empty `()` rather than emitting `Title ()`.
             let safeYear = sanitizeSeparators(year)
             let full = safeYear.isEmpty ? safeTitle : "\(safeTitle) (\(safeYear))"
-            return root.appendingPathComponent(full)
-                .appendingPathComponent("\(full)\(suffix)\(unit.languageSuffix)\(unit.ext)")
+            let name = "\(full)\(suffix)\(unit.languageSuffix)\(unit.ext)"
+            switch mode {
+            case .renameOnly: return root.appendingPathComponent(name)
+            case .organise:   return root.appendingPathComponent(full)
+                                  .appendingPathComponent(name)
+            }
         }
     }
 
     /// The top-level folder under `root` that a node's files land in — named for
     /// the title (TV) or `Title (Year)` (movie). Mirrors the first path component
     /// of `computeDestination`, and is the folder an emptied source is compared
-    /// against to decide on cleanup. Single source of truth for both build
-    /// (`planFolder`) and re-plan (`recompute`).
+    /// against to decide on cleanup.
+    ///
+    /// In `.renameOnly` mode the files land in the root itself, so the root *is*
+    /// the destination folder. A source subfolder is never equal to the root, so
+    /// the cleanup test always holds and an emptied source folder is always
+    /// offered for removal — precisely the flattening behaviour.
     static func destinationFolder(_ node: NodePlan, root: URL) -> URL {
+        guard node.outputMode == .organise else { return root }
         let safeTitle = pathComponentSafe(node.editTitle, fallback: "Untitled")
         if node.mediaType == .tv {
             return root.appendingPathComponent(safeTitle)

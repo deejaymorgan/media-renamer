@@ -24,6 +24,14 @@ struct ContentView: View {
                         Label("Choose Folder…", systemImage: "folder")
                     }
                 }
+                // The global layout, visible whenever there is a plan to lay out.
+                // Deliberately absent from the empty state: with no folder chosen
+                // there is nothing for it to describe.
+                if model.plan != nil {
+                    ToolbarItem(placement: .primaryAction) {
+                        GlobalModePicker(model: model)
+                    }
+                }
             }
 
             // Acronym controls sit just above the apply bar, shown only when
@@ -47,7 +55,7 @@ struct ContentView: View {
                 model.choose(url)
             }
         }
-        .confirmationDialog("Apply renames?", isPresented: $confirming, titleVisibility: .visible) {
+        .confirmationDialog(applyTitle, isPresented: $confirming, titleVisibility: .visible) {
             Button("Apply Renames") {
                 model.apply()
                 showResult = true
@@ -71,12 +79,76 @@ struct ContentView: View {
         return "\(url.path) · \(n) items"
     }
 
+    // MARK: - The apply guard
+
+    // Rename-only flattens, and it is the default at every launch — so the shape
+    // of the result must be stated before Apply, not left to be inferred from the
+    // preview. The title names the layout, the message counts the files per layout
+    // and the source folders that will disappear. Both modes get the same sentence
+    // shape and the same prominence: the risk of unnoticed flattening is real, but
+    // so is the risk of a staging folder quietly sprouting a folder tree, and
+    // loading one side with extra friction would train the user to click through.
+
+    /// The layout, named in the dialog's title so it cannot be skipped past.
+    private var applyTitle: String {
+        let (organise, flat) = model.fileCountsByMode
+        if organise > 0 && flat > 0 { return "Apply — mixed layout?" }
+        if flat > 0 { return "Apply — rename only, no folder tree?" }
+        return "Apply — organise into folders?"
+    }
+
     private var applyPrompt: String {
-        guard let plan = model.plan else { return "" }
-        let moves = plan.nodes.filter { $0.status == .rename }
-            .reduce(0) { $0 + $1.previewPairs.count }
-        return "Move \(moves) files and send \(model.junkToTrash.count) junk to the Trash. "
-            + "Renaming never overwrites; conflicted items are skipped."
+        let (organise, flat) = model.fileCountsByMode
+        guard organise + flat > 0 else { return "Nothing to move." }
+        let root = model.rootName.isEmpty ? "the chosen folder" : model.rootName
+
+        var lines: [String] = []
+        let clauses = [(organise, OutputMode.organise), (flat, OutputMode.renameOnly)]
+            .filter { $0.0 > 0 }
+            .map { landingClause($0.0, $0.1, root: root) }
+        lines.append("Move " + clauses.joined(separator: ", and ") + ".")
+
+        var consequences: [String] = []
+        if model.folderRemovalCount > 0 {
+            // An upper bound on purpose: the executor removes a source folder only
+            // if it is genuinely empty once its files have moved, so kept junk or a
+            // skipped file leaves it in place.
+            consequences.append("Up to \(count(model.folderRemovalCount, "emptied source folder")) "
+                                + "will be removed.")
+        }
+        let junk = model.junkToTrash.count
+        if junk > 0 {
+            consequences.append("\(count(junk, "junk file")) \(junk == 1 ? "goes" : "go") to the Trash.")
+        }
+        if !consequences.isEmpty { lines.append(consequences.joined(separator: " ")) }
+
+        lines.append("Renaming never overwrites; conflicted items are skipped.")
+        return lines.joined(separator: "\n\n")
+    }
+
+    /// "12 files directly into “Staging”, with no folder tree" — the same shape for
+    /// either mode, so a mixed plan reads as one sentence naming both.
+    private func landingClause(_ files: Int, _ mode: OutputMode, root: String) -> String {
+        let n = count(files, "file")
+        switch mode {
+        case .organise:   return "\(n) into \(organisedShape) folders inside “\(root)”"
+        case .renameOnly: return "\(n) directly into “\(root)”, with no folder tree"
+        }
+    }
+
+    /// The tree the organised half will actually build. Naming a shape that will
+    /// not exist ("Movie (Year)" when only TV is organised) is a small lie in the
+    /// one dialog that has to be trusted absolutely.
+    private var organisedShape: String {
+        switch model.organisedKinds {
+        case (true, false):  return "Show/Season"
+        case (false, true):  return "Movie (Year)"
+        default:             return "Show/Season and Movie (Year)"
+        }
+    }
+
+    private func count(_ n: Int, _ noun: String) -> String {
+        "\(n) \(noun)\(n == 1 ? "" : "s")"
     }
 }
 

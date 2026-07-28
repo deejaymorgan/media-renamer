@@ -21,4 +21,8 @@ enum Palette {
     static let conflict: Color = .red
     static let junk: Color = .orange
     static let verify: Color = .orange
+    /// The output-mode badge. One colour for *both* modes — the glyph and word
+    /// say which layout it is; the colour must not make either one read as the
+    /// warning and the other as the safe default.
+    static let mode: Color = .teal
 }
