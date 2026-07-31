@@ -9,6 +9,11 @@ Native **macOS (Swift + SwiftUI)** app that restructures a folder of `.mkv` file
 - TV: `Show Name/Season N/Show Name S##E##.mkv`
 - Movie: `Movie Name (Year)/Movie Name (Year).mkv`
 
+Two layouts, chosen per plan / per media kind / per item. The UI calls them
+**Folders** and **Flat**; the engine's cases are `organise` and `renameOnly`.
+Flat puts the identical filenames straight in the chosen folder with no tree,
+and is the app's default at every launch (never persisted).
+
 A ground-up Swift rebuild of an earlier Python CLI. That earlier project is
 **only the behavioural spec + test oracle** — no Python ships here, and the app
 never calls it. Swift tests mirror the Python `tests/` as the parity contract.
@@ -25,9 +30,11 @@ never calls it. Swift tests mirror the Python `tests/` as the parity contract.
   `TitleFormatter`, `Sidecars`, `Scanner`, `PlanModel` (NodePlan/Plan/Operation/
   RenameUnit), `PlanBuilder` (build/replan/resolve), `ConflictChecker`,
   `QualityTag` (version labels for the resolver), `Executor` + `Trasher` (apply).
-- `MediaRenamer/MediaRenamer/` — `ContentView` (split-view shell + apply bar),
-  `Sidebar`, `Inspector` (editable fields, results, junk, conflict resolver),
-  `AcronymBar`, `AppModel`.
+- `MediaRenamer/MediaRenamer/` — `ContentView` (split-view shell + apply bar +
+  overrides indicator), `Sidebar` (rows + the layout chips), `Inspector`
+  (editable fields, results, junk, conflict resolver — reports layout, doesn't
+  set it), `OutputModeUI` (mode vocabulary/colour/glyph + `ModeChip`),
+  `Palette` (colour legend), `AcronymBar`, `AppModel`.
 - `SPEC.md` — full design + roadmap + known limitations. `README.md` — quickstart.
 
 ## Build / test / run
@@ -41,10 +48,16 @@ never calls it. Swift tests mirror the Python `tests/` as the parity contract.
 - App: `SWIFT_VERSION = 5.0`, **non-sandboxed** (`ENABLE_APP_SANDBOX = NO`),
   deployment target **macOS 14+** (uses the Observation framework).
 - Primary video: `.mkv` only. Sidecars: `.srt .sub .idx .ass .ssa .vtt`.
-- Junk = anything else, plus name patterns: `sample`, `screen(s)`, `proof`, `thumb(s)`.
+- Junk = anything else, plus name patterns: `sample`, `screen(s)`, `proof`, `thumb(s)`
+  — but **only on a node being renamed**. Skipped folders and already-named ones
+  are out of contract: nothing inside them is counted, listed, or trashed.
+  `NodePlan.junk` gates the stored `detectedJunk` on status, so consumers can't
+  reopen the hole.
 - Native Trash via `FileManager.trashItem` (`SystemTrasher`).
 - Library folders (`movies/music/tv`) and hidden/metadata files (`.DS_Store`, `._*`) ignored.
 - New parsing/planning/execution code lands with parity tests mirrored from the
-  Python oracle; the quality-tag/resolver suites are new (the CLI only skips conflicts).
+  Python oracle; the quality-tag/resolver and junk-scope suites are new (the CLI
+  only skips conflicts, and only ever prompted about junk in folders it was
+  already processing).
 
 Past lessons & decisions: LEARNINGS.md — skim before starting significant work.

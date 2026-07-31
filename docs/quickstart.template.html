@@ -217,7 +217,8 @@
     <ul>
       <li><span class="chip tv">TV</span> and <span class="chip movie">Movies</span> — the files that will be renamed.</li>
       <li><b>Unchanged</b> — already named correctly (the app leaves them alone).</li>
-      <li><b>Skipped</b> — it couldn’t recognise an episode code or a year, so it won’t guess.</li>
+      <li><b>Skipped</b> — it couldn’t recognise an episode code or a year, so it won’t guess.
+          Everything inside a skipped folder is left completely alone, junk included.</li>
     </ul>
     <p>Select <b>All items</b> at the top to see every entry as a card showing the live rename —
        the new name in <b>green</b>, with the original filename beneath it. Along the bottom,
@@ -277,10 +278,13 @@
   <section class="step pagebreak">
     <h2><span class="badge">5</span> Send the junk to the Trash</h2>
     <p>Sample clips, cover art, screenshots, “proof” images — the flotsam that ships alongside a
-       download — are flagged as <b>junk</b>. For any item that contains some, the inspector lists each
-       junk file with a checkbox. Checked files go to the macOS <b>Trash</b> when you Apply; un-check
-       anything you’d rather keep. Because it’s the real Trash, you can always
+       download — are flagged as <b>junk</b>. For any item <em>being renamed</em> that contains some,
+       the inspector lists each junk file with a checkbox. Checked files go to the macOS <b>Trash</b>
+       when you Apply; un-check anything you’d rather keep. Because it’s the real Trash, you can always
        <b>Put&nbsp;Back</b> later.</p>
+    <p>Junk is only ever collected from the items the app is actually restructuring. If it skipped a
+       folder, or left one alone because it was already named correctly, nothing inside that folder is
+       counted, listed, or trashed — the <b>Junk</b> tally covers only what you can see and un-tick.</p>
     <figure>
       <div class="shot"><img src="{{IMG:05-junk}}" alt="Blade Runner 2049 selected, showing a ‘3 junk’ badge and a Junk → Trash list with checkboxes for cover.jpg, poster.png and sample.mkv."></div>
       <figcaption><b>Blade Runner 2049</b> renames cleanly while its extras —
@@ -353,7 +357,7 @@
       <tbody>
         <tr><td><b>Video</b></td><td class="mono">.mkv</td><td>Renamed into the Plex/Jellyfin layout.</td></tr>
         <tr><td><b>Subtitle (sidecar)</b></td><td class="mono">.srt .sub .idx .ass .ssa .vtt</td><td>Renamed to sit beside its video, keeping recognised language codes.</td></tr>
-        <tr><td><b>Junk</b></td><td>Anything else, plus names like <span class="mono">sample</span>, <span class="mono">screens</span>, <span class="mono">proof</span>, <span class="mono">thumbs</span></td><td>Offered for the Trash (per-file checkbox).</td></tr>
+        <tr><td><b>Junk</b></td><td>Anything else, plus names like <span class="mono">sample</span>, <span class="mono">screens</span>, <span class="mono">proof</span>, <span class="mono">thumbs</span></td><td>Offered for the Trash (per-file checkbox) — only inside items being renamed.</td></tr>
         <tr><td><b>Ignored</b></td><td>Library folders <span class="mono">Movies/Music/TV</span> and hidden/metadata files (<span class="mono">.DS_Store</span>, <span class="mono">._*</span>)</td><td>Left completely alone.</td></tr>
       </tbody>
     </table>

@@ -1,6 +1,6 @@
 # Media Renamer — Native macOS App Specification
 
-**Status:** v1.0 shipped, extending · **Updated:** 2026-07-28 · **Behavioural
+**Status:** v1.0 shipped, extending · **Updated:** 2026-07-31 · **Behavioural
 baseline:** an earlier (unpublished) Python engine (`renamer.py` + `data.py`)
 
 A native macOS app that restructures a folder of `.mkv` files (and subtitle
@@ -10,8 +10,12 @@ is kept only as the behavioural specification (the rules) and test oracle.
 
 Two output shapes, chosen per plan / per media kind / per item (§5, *Output modes*):
 
-- **Organise** — `Show Name/Season N/Show Name S##E##.mkv`, `Movie Name (Year)/Movie Name (Year).mkv`
-- **Rename only** — the identical filenames, directly in the chosen folder, no folder tree
+- **Folders** — `Show Name/Season N/Show Name S##E##.mkv`, `Movie Name (Year)/Movie Name (Year).mkv`
+- **Flat** — the identical filenames, directly in the chosen folder, no folder tree
+
+*Folders* and *Flat* are what the UI calls them, everywhere. The engine's cases
+are `organise` and `renameOnly` — API names, not display names, and deliberately
+unchanged.
 
 ---
 
@@ -85,17 +89,18 @@ media-renamer/
       QualityTag.swift              # version-label parsing for the resolver (new — no oracle)
       Executor.swift                # apply moves + empty-dir cleanup; ApplyResult
       Trasher.swift                 # Trasher protocol + SystemTrasher (real macOS Trash)
-    Tests/RenamerCoreTests/         # swift test — mirrors the Python oracle (132 tests, 16 suites)
+    Tests/RenamerCoreTests/         # swift test — mirrors the Python oracle (140 tests, 17 suites)
   MediaRenamer/
     MediaRenamer.xcodeproj          # app target; links ../RenamerCore as a local package
     MediaRenamer/
       MediaRenamerApp.swift         # @main App
       AppModel.swift                # @Observable document model (choose/replan/resolve/apply)
       ContentView.swift             # NavigationSplitView shell + toolbar + bottom apply bar
-      Sidebar.swift                 # source list (All / TV / Movies / Unchanged / Skipped) + flag badges
+      Sidebar.swift                 # source list (All / TV / Movies / Unchanged / Skipped) + layout chips + flag badges
       Inspector.swift               # detail: editable fields, results, junk toggles, conflict resolver
       AcronymBar.swift              # acronym keep/Title chips
-      OutputModeUI.swift            # mode vocabulary + badge, global picker, override menu
+      OutputModeUI.swift            # mode vocabulary/colour/glyph, the layout chip, global picker
+      Palette.swift                 # colour legend (categories + the two layout tints)
       Assets.xcassets
   SPEC.md  README.md  .gitignore
 ```
@@ -171,7 +176,16 @@ Verbatim behaviour from the earlier Python engine, pinned by parity tests:
 - **Sidecars:** `.srt/.sub/.idx/.ass/.ssa/.vtt` renamed alongside the video,
   preserving recognised language codes; unknown tokens dropped.
 - **Junk:** anything not video/subtitle, plus name patterns
-  (`sample/screens/proof/thumbs`) → offered for deletion to Trash.
+  (`sample/screens/proof/thumbs`) → offered for deletion to Trash — but **only
+  inside a node that is being renamed**. A folder the app skipped (no videos,
+  mixed content, nothing parsable), and one that already has the name it wants,
+  are both out of contract: the app is not restructuring them, so it never
+  counts, lists, or trashes anything inside them. The rule is enforced on the
+  model — `NodePlan.junk` gates the raw scan result on status — so every
+  consumer inherits it rather than each one remembering to filter.
+  Approved junk is still trashed when the node's own moves then skip on a
+  conflict: junk approval is its own axis, and every file was listed with a
+  checkbox.
 - **Conflicts:** multiple sources → one destination are flagged. The original
   CLI only *skips* them; this app adds a **resolver** — keep them all by giving
   each a **version label** (parsed from quality: `2160p Remux`, `1080p WEB-DL`,
@@ -210,9 +224,18 @@ Verbatim behaviour from the earlier Python engine, pinned by parity tests:
     **survive an Apply** — the only edit layer that does — because applying in
     several passes over one staging folder is the workflow they serve.
   - Because the default flattens, the active mode is stated in the toolbar, on
-    each preview group's destination band, and in the confirmation dialog (which
-    also counts the source folders that will disappear) — with **equal weight in
-    both directions**, so neither mode is the one you click through.
+    every sidebar row, on each preview group's destination band, and in the
+    confirmation dialog (which also counts the source folders that will
+    disappear) — with **equal weight in both directions**, so neither mode is
+    the one you click through.
+  - All three levels are set **in the sidebar**: toolbar for the whole plan,
+    section header for a media kind, row for one item. One chip component serves
+    all of them, drawing a pinned level differently from an inheriting one. The
+    inspector reports the resolved mode and does not set it — the cascade reads
+    as one control at three scopes rather than two panes' worth of settings.
+  - Overrides are easy to lose track of (they survive an Apply, and an emptied
+    group keeps its section on screen just to stay reachable), so the toolbar
+    carries an **overrides count and a Reset All**, mirrored in the View menu.
 
 **Status:** the engine and the app are both built. The app delivers preview,
 editable titles/years, acronym casing, junk→Trash, real apply (moves +
@@ -230,13 +253,14 @@ features beyond the original MVP line:
   flag badges (duplicate / junk / verify), summary counts.
 - **Editable titles** (+ movie year) with live re-plan.
 - **Acronym** keep/Title chips, remembered across launches.
-- **Junk → Trash** checkboxes.
+- **Junk → Trash** checkboxes, on the items being renamed.
 - **Apply:** real renames + empty-source cleanup + junk to the Trash, behind a
   confirm dialog, with a result summary; the folder re-scans afterward.
 - **Duplicate-version resolver** (beyond the original MVP scope).
-- **Output modes:** organise vs rename-only, with a three-level cascade
-  (toolbar / sidebar section headers / inspector), mode badges on rows, a
-  destination band on every preview group, and a mode-naming confirm dialog.
+- **Layout modes:** Folders vs Flat, with a three-level cascade set entirely in
+  the sidebar (toolbar / section header / row), an overrides count and Reset All
+  beside the toolbar picker, a root-anchored destination band on every preview
+  group, and a mode-naming confirm dialog.
 
 Not yet: undo UI, online verification, a broader settings surface, packaging.
 
@@ -271,7 +295,9 @@ is a no-op rather than a re-flagged conflict.
   directory a moved file is lifted out of) is offered for removal, deepest first.
   A subdirectory that no planned file leaves — one holding only junk, or only
   skipped files — is not, so trashing its contents can leave an empty directory
-  behind, which in turn keeps its parent. `Executor` only ever removes a
+  behind, which in turn keeps its parent. This is now confined to subdirectories
+  *inside a renaming node*: a skipped folder's contents are never trashed, so it
+  cannot be emptied and left behind in the first place. `Executor` only ever removes a
   genuinely empty directory, so this is litter rather than risk, and it keeps the
   confirmation dialog's folder count from overstating what will actually go.
 - **macOS 26 chrome.** Resolved. The summary counts moved out of the toolbar
@@ -295,6 +321,7 @@ is a no-op rather than a re-flagged conflict.
 | **M5.5 — Duplicate resolver** | ✅ version-label resolution (new capability beyond the CLI) |
 | **M5.6 — Loose-file grouping** | ✅ scattered same-show (and movie-version) loose files group like a subfolder; merge into a matching subfolder; seasons shown as a sidebar Show → Season tree |
 | **M5.7 — Output modes** | ✅ rename-only (flat) alongside organise, chosen per plan / per media kind / per item; mode surfaced in the toolbar, rows, preview bands, and the confirm dialog |
+| **M5.8 — Junk scope + layout UX** | ✅ junk confined to nodes being renamed (safety fix); layout set entirely in the sidebar with one chip at three scopes; Folders/Flat vocabulary; a colour and glyph per mode; overrides count + Reset All; root-anchored destination bands with path/reveal |
 | **M6 — Undo** | ⬜ reverse the last applied batch (engine records moves; UI pending) |
 | **M7 — Online verify** | ⬜ opt-in TMDb/TVDB confirmation + cache |
 | **M8 — Package** | ⬜ notarised `.app`, app icon, double-click launch |
@@ -315,7 +342,9 @@ Parity with the old CLI was reached at **M4**; everything after is new capabilit
   `mode(for:mediaType:)` resolves one node. Stored by the app, resolved by the
   engine.
 - `NodePlan` — one top-level entry's plan: `source`, `mediaType`, `status`
-  (`.rename / .unchanged / .skip`), `operations`, `junk`, `previewPairs`,
+  (`.rename / .unchanged / .skip`), `operations`, `junk` (a status gate over the
+  stored `detectedJunk`: empty unless the node is `.rename`, so junk can only
+  ever come from something being restructured), `previewPairs`,
   verify info, the editable `editTitle`/`editYear`, `units`, and the resolved
   `outputMode` (everything downstream reads this one field rather than
   re-resolving three settings).
@@ -337,12 +366,17 @@ changes through identical code.
 ## 9. Testing
 
 - `swift test --package-path RenamerCore` runs the engine suite headlessly
-  (no Xcode, no display) — **132 tests across 16 suites**, the parity contract for
+  (no Xcode, no display) — **140 tests across 17 suites**, the parity contract for
   every rule.
 - New parsing/planning/execution code lands with mirrored cases from the Python
-  `tests/test_renamer.py` oracle. The quality-tag, duplicate-resolve and
-  output-mode suites are **new** (no oracle — the Python CLI only detects and
-  skips conflicts, and always built folders).
+  `tests/test_renamer.py` oracle. The quality-tag, duplicate-resolve,
+  output-mode and junk-scope suites are **new** (no oracle — the Python CLI only
+  detects and skips conflicts, always built folders, and only ever prompted
+  about junk in folders it was already processing).
+- `JunkScopeTests` pins the junk rule end to end: skipped and unchanged nodes
+  contribute nothing to the count or the trash list, junk returns when a layout
+  change gives a node work again, and applying a plan leaves a skipped folder's
+  contents byte-for-byte alone.
 - The four output-mode suites are `FlatDestinationTests` (the flat shape, and
   that the filename is byte-identical in both modes), `ModeCascadeTests` (pure
   item → group → global resolution), `ModeEquivalenceTests` (the conflicted-source

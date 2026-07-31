@@ -6,9 +6,14 @@ subtitle sidecars) into a Plex/Jellyfin-friendly tree:
 - **TV:** `Show Name/Season N/Show Name S##E##.mkv`
 - **Movie:** `Movie Name (Year)/Movie Name (Year).mkv`
 
-Pick a folder → preview the plan → tweak titles, set acronym casing, choose which
-junk to trash, resolve duplicate versions → **Apply**. Nothing on disk changes
-until you press Apply, and it asks for confirmation first.
+…or **Flat**: the same tidied filenames straight in the chosen folder, with no
+folder tree at all. Pick the layout for the whole plan, for TV or Movies, or for
+one show or film.
+
+Pick a folder → preview the plan → choose the layout, tweak titles, set acronym
+casing, choose which junk to trash, resolve duplicate versions → **Apply**.
+Nothing on disk changes until you press Apply, and it asks for confirmation
+first.
 
 See [`SPEC.md`](SPEC.md) for the full design and roadmap.
 
@@ -52,7 +57,9 @@ workflow.
 ## ⚠️ Safety
 
 This app **renames and moves your files** and sends unwanted "junk" to the macOS
-**Trash**. The preview is read-only — only **Apply** touches disk, and it confirms
+**Trash**. It only ever touches items it is actually renaming: anything inside a
+folder it skipped, or one that already has the right name, is left completely
+alone. The preview is read-only — only **Apply** touches disk, and it confirms
 first. Renaming never overwrites, and trashed files can be restored with Finder's
 **Put Back** — but treat Apply as a real, bulk filesystem operation and
 **run it on a copy of your media first**, until you trust the results.
@@ -102,7 +109,7 @@ SPEC.md        Full specification + roadmap.
 Pick a folder, preview, and Apply real renames — with
 empty-folder cleanup and junk sent to the macOS Trash. The full walkthrough is in
 the [Quick Start guide](https://deejaymorgan.github.io/media-renamer/). The engine
-is covered by 105 tests, including a regression suite that pins its parsing
+is covered by 140 tests, including a regression suite that pins its parsing
 and planning behaviour.
 
 Not built yet: undo UI, online title verification, and a *notarised* `.app`

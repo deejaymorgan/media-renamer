@@ -5,6 +5,11 @@ it reads a folder you choose and renames/moves files on your own disk. The main
 risk surface is therefore the file operations themselves (renames, empty-folder
 cleanup, and sending junk to the Trash).
 
+That surface is bounded by contract: the app only ever moves or trashes things
+belonging to an item it is restructuring. Folders it skips — and folders already
+named the way it wants — are never modified, and nothing inside them is counted
+or sent to the Trash.
+
 ## Supported versions
 
 This is a personal project, so only the latest `main` is supported. Fixes land
