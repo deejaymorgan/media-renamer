@@ -12,7 +12,14 @@ struct ContentView: View {
         VStack(spacing: 0) {
             NavigationSplitView {
                 SidebarView(model: model)
-                    .navigationSplitViewColumnWidth(min: 250, ideal: 300)
+                    // The `max` is load-bearing, not taste. Without it the column
+                    // has no upper bound, so it can be dragged until the detail
+                    // region is too narrow to lay the toolbar out — and the
+                    // trailing `.primaryAction` items collapse into a `»` overflow
+                    // menu, taking the layout picker with them. The split position
+                    // persists across launches, so one careless drag hides the
+                    // picker permanently until it is dragged back.
+                    .navigationSplitViewColumnWidth(min: 250, ideal: 300, max: 420)
             } detail: {
                 DetailView(model: model)
             }
@@ -50,7 +57,13 @@ struct ContentView: View {
             Divider()
             BottomBar(model: model) { confirming = true }
         }
-        .frame(minWidth: 960, minHeight: 640)
+        // 1040, not 960: measured, the toolbar needs roughly `sidebar + 510` to
+        // lay both trailing items out, so the 420 cap above puts the real floor
+        // at ~930. The extra is headroom for the toolbar's own content — swapping
+        // the picker's labels back to `Organise / Rename only` alone costs 68pt
+        // of intrinsic width, which at 960 would have reintroduced the overflow
+        // invisibly.
+        .frame(minWidth: 1040, minHeight: 640)
         .focusedSceneValue(\.appModel, model)
         .fileImporter(
             isPresented: $importing,
