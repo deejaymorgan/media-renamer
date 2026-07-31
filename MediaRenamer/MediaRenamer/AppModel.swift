@@ -167,6 +167,31 @@ final class AppModel {
         rebuildPlan()
     }
 
+    /// How many levels of the cascade are currently overriding the global
+    /// layout: the two group settings plus every pinned item. Zero means the
+    /// toolbar picker alone decides the whole plan.
+    var overrideCount: Int {
+        (tvOverride == .inherit ? 0 : 1)
+            + (movieOverride == .inherit ? 0 : 1)
+            + itemOverrides.count
+    }
+
+    /// Clear every group and item override at once, leaving the global picker in
+    /// sole charge. One rebuild, not one per override.
+    ///
+    /// This is the plan-wide counterpart to a chip's "Inherit". It exists
+    /// because overrides are easy to lose track of: they survive an Apply, and a
+    /// group whose items have all been renamed keeps its section on screen
+    /// purely so the header control stays reachable. Clearing them one row at a
+    /// time means first finding the rows.
+    func resetAllOverrides() {
+        guard overrideCount > 0 else { return }
+        tvOverride = .inherit
+        movieOverride = .inherit
+        itemOverrides = [:]
+        rebuildPlan()
+    }
+
     /// The mode a node would resolve to with no override of its own — what
     /// "Inherit" means for that node, so the UI can name it instead of leaving the
     /// default unexplained.

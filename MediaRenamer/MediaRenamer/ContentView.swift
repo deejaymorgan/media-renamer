@@ -31,6 +31,11 @@ struct ContentView: View {
                     ToolbarItem(placement: .primaryAction) {
                         GlobalModePicker(model: model)
                     }
+                    // Sits after the picker because it qualifies it: "…and N
+                    // places are ignoring this."
+                    ToolbarItem(placement: .primaryAction) {
+                        OverridesIndicator(model: model)
+                    }
                 }
             }
 
@@ -46,6 +51,7 @@ struct ContentView: View {
             BottomBar(model: model) { confirming = true }
         }
         .frame(minWidth: 960, minHeight: 640)
+        .focusedSceneValue(\.appModel, model)
         .fileImporter(
             isPresented: $importing,
             allowedContentTypes: [.folder],
@@ -154,6 +160,40 @@ struct ContentView: View {
 /// hardcoding an "s" and reading "1 files".
 private func count(_ n: Int, _ noun: String) -> String {
     "\(n) \(noun)\(n == 1 ? "" : "s")"
+}
+
+// MARK: - Overrides indicator (toolbar, beside the layout picker)
+
+/// How many levels are overriding the global layout, and one click to clear them
+/// all. Absent when the cascade is uniform — there is nothing to report.
+///
+/// Overrides are the one edit layer that outlives an Apply, and a group whose
+/// items have all been renamed keeps its section on screen purely so its header
+/// control stays reachable. Both make it easy to be running a layout you no
+/// longer remember choosing, in a place you would have to go looking for. This
+/// is the folder-independent surface that says so and undoes it.
+struct OverridesIndicator: View {
+    let model: AppModel
+
+    var body: some View {
+        if model.overrideCount > 0 {
+            HStack(spacing: 4) {
+                Text(count(model.overrideCount, "override"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                Button {
+                    model.resetAllOverrides()
+                } label: {
+                    Image(systemName: "arrow.uturn.backward")
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Reset all layout overrides")
+            }
+            .help("\(count(model.overrideCount, "layout override")) in force. "
+                  + "Reset returns every TV, Movies and row setting to inheriting.")
+        }
+    }
 }
 
 // MARK: - Summary chips (bottom bar, leading)
