@@ -34,10 +34,34 @@ extension OutputMode {
         }
     }
 
+    /// The chip glyph. A folder against a plain list — "a list where folders
+    /// would be" — rather than the old `tray.full`, which read as a container
+    /// (an inbox, a pile) when the whole point of flat mode is that there is no
+    /// container.
     var symbol: String {
         switch self {
         case .organise:   return "folder"
-        case .renameOnly: return "tray.full"
+        case .renameOnly: return "list.bullet"
+        }
+    }
+
+    /// The variant used in the destination band, where the glyph sits at
+    /// `callout` and wants more weight. Most list symbols have no `.fill`
+    /// counterpart, so the flat side stays the same glyph and lets the tint
+    /// carry the weight — an asymmetry several badge glyphs already have.
+    var bandSymbol: String {
+        switch self {
+        case .organise:   return "folder.fill"
+        case .renameOnly: return symbol
+        }
+    }
+
+    /// Blue for Folders, teal for Flat. See `Palette` for why the two modes
+    /// stopped sharing one tint.
+    var tint: Color {
+        switch self {
+        case .organise:   return Palette.folders
+        case .renameOnly: return Palette.flat
         }
     }
 }
@@ -70,10 +94,10 @@ struct ModeBadge: View {
         }
         .font(.caption2)
         .fontWeight(explicit ? .semibold : .regular)
-        .foregroundStyle(Palette.mode)
+        .foregroundStyle(mode.tint)
         .padding(.horizontal, 5)
         .padding(.vertical, 1)
-        .background(Palette.mode.opacity(explicit ? 0.18 : 0.10), in: Capsule())
+        .background(mode.tint.opacity(explicit ? 0.18 : 0.10), in: Capsule())
     }
 }
 

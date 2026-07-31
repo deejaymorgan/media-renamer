@@ -394,19 +394,19 @@ private func groupedByFolder(_ pairs: [PreviewPair]) -> [(folder: String, pairs:
 /// nowhere else in the app.
 private struct FolderBand: View {
     let crumb: String
-    var flattened = false
+    var mode: OutputMode = .organise
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: flattened ? "tray.full.fill" : "folder.fill")
-                .foregroundStyle(flattened ? Palette.mode : .blue)
+            Image(systemName: mode.bandSymbol)
+                .foregroundStyle(mode.tint)
             crumbText
         }
         .font(.callout)
         .padding(.horizontal, 10).padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
-        .help(flattened
+        .help(mode == .renameOnly
               ? "Flat — these files land directly in “\(crumb)”, with no folder tree."
               : "These files land in “\(crumb)”.")
     }
@@ -464,7 +464,7 @@ private struct FolderGroup: View {
                 // chosen folder rather than showing a bare list, which would be
                 // indistinguishable from an organised group.
                 FolderBand(crumb: rootName.isEmpty ? "the chosen folder" : rootName,
-                           flattened: true)
+                           mode: .renameOnly)
             }
             // Indent the files under their folder band, with a guide rail, so
             // each list reads as nested inside its destination folder.

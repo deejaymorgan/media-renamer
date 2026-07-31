@@ -21,8 +21,20 @@ enum Palette {
     static let conflict: Color = .red
     static let junk: Color = .orange
     static let verify: Color = .orange
-    /// The output-mode badge. One colour for *both* modes — the glyph and word
-    /// say which layout it is; the colour must not make either one read as the
-    /// warning and the other as the safe default.
-    static let mode: Color = .teal
+    // Layout — one colour per mode, adopting the split the destination bands
+    // already drew (a blue `folder.fill`, a teal flat band).
+    //
+    // This **reverses** an earlier decision to tint both modes the same, whose
+    // stated worry was that a split would make one mode read as the warning and
+    // the other as the safe default. Blue and teal are both calm hues and
+    // neither carries an alarm reading, so differentiating them no longer
+    // implies that asymmetry — while sharing one tint left the two layouts
+    // genuinely hard to tell apart at a glance, which is what prompted the
+    // reversal. Colour is still never the only signal: the glyph and the word
+    // carry it too.
+    //
+    // Blue doing double duty with the TV chip is accepted: different context,
+    // different shape.
+    static let folders: Color = .blue
+    static let flat: Color = .teal
 }
