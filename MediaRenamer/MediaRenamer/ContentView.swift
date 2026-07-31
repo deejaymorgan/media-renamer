@@ -177,9 +177,8 @@ struct OverridesIndicator: View {
 
     var body: some View {
         if model.overrideCount > 0 {
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
                 Text(count(model.overrideCount, "override"))
-                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
                 Button {
@@ -187,7 +186,10 @@ struct OverridesIndicator: View {
                 } label: {
                     Image(systemName: "arrow.uturn.backward")
                 }
-                .buttonStyle(.borderless)
+                // No `.buttonStyle(.borderless)`: it opts the button out of
+                // toolbar control metrics and collapses this whole item to 14pt
+                // beside 36pt native ones. `.secondary` on the count carries the
+                // hierarchy without shrinking anything.
                 .accessibilityLabel("Reset all layout overrides")
             }
             .help("\(count(model.overrideCount, "layout override")) in force. "

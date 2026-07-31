@@ -217,25 +217,45 @@ struct ItemModeChip: View {
 /// The plan-wide layout. Two states, both always visible, so the active one is
 /// legible at a glance rather than hidden behind a menu. Rendered only once a
 /// folder is loaded — there is nothing to lay out before that.
+///
+/// **The item is the control and nothing else.** On macOS 26 the segmented
+/// picker draws no border of its own — no dividers, no surrounding capsule, just
+/// a filled pill on the selected segment — and relies on the toolbar item's
+/// glass container to be its frame. So a caption sharing the item does not sit
+/// in an outer pill around the control; it sits *level with the segments, inside
+/// the picker's own frame*, and reads as an inert third segment that happens to
+/// do nothing when clicked. The visible `Layout` caption that used to lead this
+/// item is gone for that reason, and the tooltip now opens with the word, since
+/// it became the place the axis is named. Anything else added back into this
+/// item will land inside the segments again.
+///
+/// **The width is the control's own.** A hardcoded one is a landmine: the
+/// previous `190` was 18pt *narrower* than `Organise / Rename only`'s 208pt
+/// intrinsic, so it was quietly squeezing, and last round's 190 → 140 happened
+/// to land exactly on `Folders / Flat`'s 140pt intrinsic — which is why nothing
+/// looked wrong. The next vocabulary change would have reintroduced the squeeze
+/// just as invisibly.
+///
+/// **Dropping the caption improved accessibility rather than costing it.**
+/// `.labelsHidden()` does not affect accessibility, so the picker keeps its own
+/// "Layout" label; the decorative `Text` was an unassociated static string that
+/// VoiceOver announced as a second one.
 struct GlobalModePicker: View {
     let model: AppModel
 
     var body: some View {
-        HStack(spacing: 6) {
-            Text("Layout").font(.callout).foregroundStyle(.secondary)
-            Picker("Layout", selection: Binding(
-                get: { model.globalMode },
-                set: { model.setGlobalMode($0) }
-            )) {
-                ForEach(OutputMode.allCases, id: \.self) { mode in
-                    Text(mode.name).tag(mode)
-                }
+        Picker("Layout", selection: Binding(
+            get: { model.globalMode },
+            set: { model.setGlobalMode($0) }
+        )) {
+            ForEach(OutputMode.allCases, id: \.self) { mode in
+                Text(mode.name).tag(mode)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .frame(width: 140)
         }
-        .help("How every item is laid out under the chosen folder. "
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .accessibilityLabel("Layout")
+        .help("Layout — how every item is laid out under the chosen folder. "
               + "The TV and Movies headers, and each row, can override this.")
     }
 }
