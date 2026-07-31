@@ -111,6 +111,9 @@ struct InspectorView: View {
                     Image(systemName: node.mediaType == .tv ? "tv" : "film")
                         .foregroundStyle(.secondary)
                     Text(node.displayTitle).font(.headline)
+                    // Reported, not set: layout is chosen on the sidebar row.
+                    ModeBadge(mode: node.outputMode,
+                              explicit: model.itemOverride(for: node.source) != .inherit)
                     FlagBadges(node: node, conflicts: conflicts)
                     Spacer()
                 }
@@ -119,10 +122,7 @@ struct InspectorView: View {
                     .textSelection(.enabled)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .bottom, spacing: 14) {
-                        EditFields(node: node, model: model).id(node.source)
-                        ItemModeControl(node: node, model: model)
-                    }
+                    EditFields(node: node, model: model).id(node.source)
                     TitleVerifyNote(node: node)
                 }
                 .padding(12)
@@ -138,27 +138,6 @@ struct InspectorView: View {
             }
             .padding(20)
             .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-}
-
-/// The per-item layout override, sitting beside the title field — the item level
-/// of the cascade. Three states: `Inherit` names whichever mode the group/global
-/// currently supplies, so deferring never hides the outcome.
-struct ItemModeControl: View {
-    let node: NodePlan
-    let model: AppModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text("Layout").font(.caption).foregroundStyle(.secondary)
-            ModeOverrideMenu(
-                current: model.itemOverride(for: node.source),
-                inherited: model.inheritedMode(for: node),
-                set: { model.setItemOverride($0, for: node.source) },
-                compact: true
-            )
-            .padding(.bottom, 3)   // sit on the same baseline as the bordered fields
         }
     }
 }
@@ -182,6 +161,8 @@ struct SeasonInspectorView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "tv").foregroundStyle(.secondary)
                     Text("\(node.displayTitle) · Season \(slice.number)").font(.headline)
+                    ModeBadge(mode: node.outputMode,
+                              explicit: model.itemOverride(for: node.source) != .inherit)
                     if conflictedHere {
                         Label("duplicate", systemImage: "exclamationmark.triangle.fill")
                             .labelStyle(.iconOnly).foregroundStyle(Palette.conflict)
@@ -192,14 +173,13 @@ struct SeasonInspectorView: View {
                     .font(.callout).foregroundStyle(.secondary)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .bottom, spacing: 14) {
-                        EditFields(node: node, model: model).id(node.source)
-                        ItemModeControl(node: node, model: model)
-                    }
+                    EditFields(node: node, model: model).id(node.source)
                     // One override per show, never per season: flattening collapses
                     // every season into the same folder, so a per-season setting
-                    // would change nothing visible.
-                    Text("Editing the title or layout updates every season of this show.")
+                    // would change nothing visible. Layout is set on the show's
+                    // sidebar row, which is the level it applies at.
+                    Text("Editing the title updates every season of this show. "
+                         + "Layout is set on the show’s row in the sidebar.")
                         .font(.caption2).foregroundStyle(.secondary)
                     TitleVerifyNote(node: node)
                 }
@@ -312,18 +292,17 @@ struct AllCard: View {
                         .lineLimit(1).truncationMode(.tail)
                         .help(node.displayTitle)
                     Spacer()
-                    ModeBadge(mode: node.outputMode)
+                    ModeBadge(mode: node.outputMode,
+                              explicit: model.itemOverride(for: node.source) != .inherit)
                     FlagBadges(node: node, conflicts: conflicts, compact: true)
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
-            // Always-editable fields (don't toggle the card).
-            HStack(alignment: .bottom, spacing: 14) {
-                EditFields(node: node, model: model).id(node.source)
-                ItemModeControl(node: node, model: model)
-            }
+            // Always-editable fields (don't toggle the card). Layout is not among
+            // them: it is set on the sidebar row, and this badge reports it.
+            EditFields(node: node, model: model).id(node.source)
 
             if isExpanded {
                 if node.isConflicted(in: conflicts) {

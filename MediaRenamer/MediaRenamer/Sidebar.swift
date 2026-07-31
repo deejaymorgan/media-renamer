@@ -21,6 +21,7 @@ struct SidebarView: View {
                     Section {
                         ForEach(g.tvRename) { show in
                             ShowRow(node: show, conflicts: plan.conflicts,
+                                    model: model,
                                     expanded: model.isShowExpanded(show.source),
                                     canExpand: show.isMultiSeason,
                                     onTap: {
@@ -43,7 +44,7 @@ struct SidebarView: View {
                 if !g.movieRename.isEmpty || model.movieOverride != .inherit {
                     Section {
                         ForEach(g.movieRename) { node in
-                            SidebarRow(node: node, conflicts: plan.conflicts)
+                            SidebarRow(node: node, conflicts: plan.conflicts, model: model)
                                 .tag(Selection.item(node.source))
                         }
                     } header: {
@@ -58,7 +59,7 @@ struct SidebarView: View {
                             // be undone in place — the same reason the group
                             // sections above survive an empty bucket.
                             if model.hasSelectableRow(node) {
-                                PinnedRow(node: node)
+                                PinnedRow(node: node, model: model)
                                     .tag(Selection.item(node.source))
                             } else {
                                 MutedRow(name: node.originalName, detail: "already named")
@@ -104,54 +105,64 @@ struct GroupModeHeader: View {
         HStack(spacing: 6) {
             Text(title)
             Spacer(minLength: 6)
-            ModeOverrideMenu(
+            ModeChip(
                 current: model.groupOverride(for: type),
                 inherited: model.globalMode,
-                set: { model.setGroupOverride($0, for: type) },
-                compact: true
+                set: { model.setGroupOverride($0, for: type) }
             )
         }
     }
 }
 
 /// A TV show row: a disclosure chevron (when the show spans multiple seasons),
-/// the show name, and a season/file summary. The whole row is one button — a click
-/// selects the show (focusing every season's files under a single title edit) and,
-/// for a multi-season show, toggles its seasons open/closed. Clicking again keeps
-/// the show selected and toggles back. (We drive selection in the button action
-/// instead of relying on the List's tap, which a custom row gesture suppresses.)
+/// the show name, a season/file summary, and the show's layout control.
+///
+/// The name area is one button — a click selects the show (focusing every
+/// season's files under a single title edit) and, for a multi-season show,
+/// toggles its seasons open/closed. Clicking again keeps the show selected and
+/// toggles back. (We drive selection in the button action instead of relying on
+/// the List's tap, which a custom row gesture suppresses.)
+///
+/// The layout chip sits **outside** that button rather than inside it. A menu
+/// nested inside a row-wide button has to fight it for every click; giving the
+/// button everything to the left of the chip keeps the whole name area tappable
+/// and leaves the chip an uncontested hit area of its own.
 struct ShowRow: View {
     let node: NodePlan
     let conflicts: Set<URL>
+    let model: AppModel
     let expanded: Bool
     let canExpand: Bool
     let onTap: () -> Void
 
     var body: some View {
-        Button(action: onTap) {
-            HStack(spacing: 6) {
-                Image(systemName: expanded ? "chevron.down" : "chevron.right")
-                    .font(.caption2).foregroundStyle(.secondary)
-                    .frame(width: 12)
-                    .opacity(canExpand ? 1 : 0)
+        HStack(spacing: 6) {
+            Button(action: onTap) {
+                HStack(spacing: 6) {
+                    Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                        .font(.caption2).foregroundStyle(.secondary)
+                        .frame(width: 12)
+                        .opacity(canExpand ? 1 : 0)
 
-                Image(systemName: "tv").foregroundStyle(.secondary)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(node.displayTitle)
-                        .lineLimit(1).truncationMode(.tail)
-                        .help(node.displayTitle)
-                    Text(node.seasonSummary)
-                        .font(.caption).foregroundStyle(.secondary)
-                        .lineLimit(1).truncationMode(.middle)
+                    Image(systemName: "tv").foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(node.displayTitle)
+                            .lineLimit(1).truncationMode(.tail)
+                            .help(node.displayTitle)
+                        Text(node.seasonSummary)
+                            .font(.caption).foregroundStyle(.secondary)
+                            .lineLimit(1).truncationMode(.middle)
+                    }
+                    Spacer(minLength: 4)
                 }
-                Spacer(minLength: 4)
-                ModeBadge(mode: node.outputMode)
-                FlagBadges(node: node, conflicts: conflicts, compact: true)
+                .contentShape(Rectangle())
             }
-            .padding(.vertical, 2)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+
+            ItemModeChip(node: node, model: model)
+            FlagBadges(node: node, conflicts: conflicts, compact: true)
         }
-        .buttonStyle(.plain)
+        .padding(.vertical, 2)
     }
 }
 
@@ -200,6 +211,7 @@ struct AllItemsRow: View {
 struct SidebarRow: View {
     let node: NodePlan
     let conflicts: Set<URL>
+    let model: AppModel
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: node.mediaType == .tv ? "tv" : "film")
@@ -216,7 +228,7 @@ struct SidebarRow: View {
                     .lineLimit(1).truncationMode(.middle)
             }
             Spacer(minLength: 4)
-            ModeBadge(mode: node.outputMode)
+            ItemModeChip(node: node, model: model)
             FlagBadges(node: node, conflicts: conflicts, compact: true)
         }
         .padding(.vertical, 2)
@@ -224,11 +236,18 @@ struct SidebarRow: View {
 }
 
 /// An `.unchanged` row that a deliberate layout override is holding in place —
-/// forcing organise mode onto an already-organised item leaves it nothing to do.
-/// Unlike its muted siblings it stays selectable and badged, so the override
-/// remains visible and reversible instead of quietly stranding the item.
+/// forcing Folders onto an already-organised item leaves it nothing to do.
+/// Unlike its muted siblings it stays selectable and carries the layout control,
+/// so the override remains visible and reversible instead of quietly stranding
+/// the item.
+///
+/// The control here is **load-bearing, not decorative**: this row is the only
+/// place a pinned override on a node with no work left can be cleared. When the
+/// item control lived in the inspector this row could get away with a static
+/// badge, because the inspector still offered a way out. It no longer does.
 struct PinnedRow: View {
     let node: NodePlan
+    let model: AppModel
 
     var body: some View {
         HStack(spacing: 8) {
@@ -241,7 +260,7 @@ struct PinnedRow: View {
                 Text("already named").font(.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 4)
-            ModeBadge(mode: node.outputMode, explicit: true)
+            ItemModeChip(node: node, model: model)
         }
         .padding(.vertical, 2)
     }

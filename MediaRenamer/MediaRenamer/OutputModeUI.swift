@@ -3,8 +3,8 @@ import RenamerCore
 
 // MARK: - Vocabulary
 
-/// One set of words and glyphs for the output mode, shared by the toolbar
-/// picker, the group and item menus, the row badges, the preview band and the
+/// One set of words, glyphs and colours for the output mode, shared by the
+/// toolbar picker, the group and row controls, the preview band and the
 /// confirmation dialog — so the mode is named the same way everywhere it appears
 /// and the two modes always read as siblings rather than as a default and an
 /// exception.
@@ -76,28 +76,139 @@ extension ModeOverride {
     }
 }
 
-// MARK: - Badge
+// MARK: - The chip
 
-/// The mode a row's files will land in, as a small tinted capsule. Shown on every
-/// rename row in **both** modes: a badge that appeared only when flattening would
-/// make organise mode the unmarked default, and the whole point is that neither
-/// mode is the silent one. An override is drawn slightly stronger, so "this item
-/// was set deliberately" is distinguishable from "this item inherited".
-struct ModeBadge: View {
+/// The face every layout chip wears, interactive or not: the mode's glyph and
+/// word in the mode's tint, inside a capsule.
+///
+/// **Pinned and inherited are different states, not different weights.** A
+/// pinned chip is bordered and filled; an inherited one is a soft wash with no
+/// border. The previous cue — semibold text over an 0.18-vs-0.10 background —
+/// was invisible in practice, which is how a plan could carry overrides nobody
+/// could see. Weight still rides along, but the border is what carries it.
+private struct ModeChipFace: View {
     let mode: OutputMode
-    var explicit = false
+    /// Set deliberately at this level, rather than inherited from above.
+    let pinned: Bool
+    /// Reserve and draw a disclosure chevron. A chip that never moves reads as a
+    /// badge — which is exactly why the item control went unnoticed in the
+    /// inspector — so the interactive one always shows its chevron and brightens
+    /// the whole capsule on hover.
+    var interactive = false
+    var hovering = false
 
     var body: some View {
         HStack(spacing: 3) {
             Image(systemName: mode.symbol)
             Text(mode.name)
+            if interactive {
+                Image(systemName: "chevron.down")
+                    .opacity(hovering ? 0.9 : 0.4)
+            }
         }
         .font(.caption2)
-        .fontWeight(explicit ? .semibold : .regular)
+        .fontWeight(pinned ? .semibold : .regular)
         .foregroundStyle(mode.tint)
-        .padding(.horizontal, 5)
-        .padding(.vertical, 1)
-        .background(mode.tint.opacity(explicit ? 0.18 : 0.10), in: Capsule())
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background {
+            Capsule()
+                .fill(mode.tint.opacity(fill))
+                .overlay(
+                    Capsule().strokeBorder(mode.tint.opacity(pinned ? 0.85 : 0),
+                                           lineWidth: 1)
+                )
+        }
+    }
+
+    private var fill: Double {
+        if pinned { return hovering ? 0.30 : 0.22 }
+        return hovering ? 0.20 : 0.10
+    }
+}
+
+/// A read-only layout indicator, for the surfaces that report the mode rather
+/// than set it: the inspector header and the All-items cards.
+struct ModeBadge: View {
+    let mode: OutputMode
+    var explicit = false
+
+    var body: some View {
+        ModeChipFace(mode: mode, pinned: explicit)
+            .accessibilityElement()
+            .accessibilityLabel("Layout")
+            .accessibilityValue(explicit ? "\(mode.name), set here" : "\(mode.name), inherited")
+    }
+}
+
+/// The three-state layout control: defer to the level above, or pin one of the
+/// two modes. `Inherit` names the mode it currently resolves to, so choosing to
+/// defer never leaves the outcome unstated.
+///
+/// **One component at both densities.** The sidebar section headers (group
+/// level) and the show/movie rows (item level) render the same chip, because a
+/// row control that looked different from the header control would read as a
+/// different kind of thing — and the point of putting them in one place is that
+/// they are one thing at three scopes.
+///
+/// **The menu is an invisible overlay, not the chip's label.** A `Menu`
+/// restyles its label as button content and drops the tint and the capsule with
+/// it — that is a property of this codebase, observed when the control was first
+/// built, and it is why the old version had to keep its badge outside the menu
+/// and settle for a 16pt chevron as the only clickable part. Laying a
+/// clear-labelled menu over an ordinary chip sidesteps the question rather than
+/// betting on a menu style: the label has no styling left to lose, the chip
+/// renders exactly as `ModeBadge` does, and the click target is the whole
+/// capsule.
+struct ModeChip: View {
+    let current: ModeOverride
+    /// The mode `.inherit` resolves to for this group/item right now.
+    let inherited: OutputMode
+    let set: (ModeOverride) -> Void
+
+    @State private var hovering = false
+
+    private var effective: OutputMode { current.forced ?? inherited }
+    private var pinned: Bool { current != .inherit }
+
+    var body: some View {
+        ModeChipFace(mode: effective, pinned: pinned,
+                     interactive: true, hovering: hovering)
+            .overlay {
+                Menu {
+                    Picker("Layout", selection: Binding(get: { current }, set: set)) {
+                        Text("Inherit — \(inherited.name)").tag(ModeOverride.inherit)
+                        Text(OutputMode.organise.name).tag(ModeOverride.organise)
+                        Text(OutputMode.renameOnly.name).tag(ModeOverride.renameOnly)
+                    }
+                    .pickerStyle(.inline)
+                } label: {
+                    Rectangle().fill(.clear).contentShape(Rectangle())
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+            }
+            .onHover { hovering = $0 }
+            .help(pinned
+                  ? "Layout set here — \(effective.name). Files land \(effective.detail). Choose “Inherit” to clear it."
+                  : "Layout inherited — \(effective.name). Files land \(effective.detail).")
+            .accessibilityLabel("Layout")
+            .accessibilityValue(pinned ? "\(effective.name), set here"
+                                       : "\(effective.name), inherited")
+    }
+}
+
+/// The row-level layout control, wired to one node's slot in the cascade. Every
+/// sidebar row that can carry an override renders this, so the three of them
+/// cannot drift apart.
+struct ItemModeChip: View {
+    let node: NodePlan
+    let model: AppModel
+
+    var body: some View {
+        ModeChip(current: model.itemOverride(for: node.source),
+                 inherited: model.inheritedMode(for: node),
+                 set: { model.setItemOverride($0, for: node.source) })
     }
 }
 
@@ -126,52 +237,5 @@ struct GlobalModePicker: View {
         }
         .help("How every item is laid out under the chosen folder. "
               + "The TV and Movies headers, and each row, can override this.")
-    }
-}
-
-// MARK: - Group / item control
-
-/// The three-state override used at the group ("all TV", "all Movies") and item
-/// levels. `Inherit` names the mode it currently resolves to, so choosing to
-/// defer never leaves the outcome unstated.
-struct ModeOverrideMenu: View {
-    let current: ModeOverride
-    /// The mode `.inherit` resolves to for this group/item right now.
-    let inherited: OutputMode
-    let set: (ModeOverride) -> Void
-    /// Hides the leading "Layout" caption, for tight rows like a section header.
-    var compact = false
-
-    private var effective: OutputMode { current.forced ?? inherited }
-
-    var body: some View {
-        HStack(spacing: 3) {
-            if !compact {
-                Text("Layout").font(.caption).foregroundStyle(.secondary)
-            }
-            // The badge sits OUTSIDE the menu on purpose. As a `Menu` label it gets
-            // re-styled as button content — the tint and the capsule are dropped —
-            // which silently erases the one thing the weight was carrying: whether
-            // this level is pinned or inheriting. Keeping the badge as an ordinary
-            // view preserves that, and leaves the menu as a plain disclosure.
-            ModeBadge(mode: effective, explicit: current != .inherit)
-            Menu {
-                Picker("Layout", selection: Binding(get: { current }, set: set)) {
-                    Text("Inherit — \(inherited.name)").tag(ModeOverride.inherit)
-                    Text(OutputMode.organise.name).tag(ModeOverride.organise)
-                    Text(OutputMode.renameOnly.name).tag(ModeOverride.renameOnly)
-                }
-                .pickerStyle(.inline)
-            } label: {
-                Image(systemName: "chevron.down").font(.caption2)
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .frame(width: 16)
-            .contentShape(Rectangle())
-        }
-        .help(current == .inherit
-              ? "Inheriting — \(effective.name). Files land \(effective.detail)."
-              : "Set to \(effective.name). Files land \(effective.detail).")
     }
 }
