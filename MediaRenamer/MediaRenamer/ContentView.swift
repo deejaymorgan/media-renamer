@@ -238,10 +238,31 @@ struct OverridesIndicator: View {
 
     var body: some View {
         if model.overrideCount > 0 {
-            HStack(spacing: 6) {
+            // `spacing: 0`, deliberately. The button keeps toolbar control
+            // metrics (see below), which means it already carries the system's
+            // own horizontal padding around its glyph. Any `spacing` here lands
+            // *on top of* that padding, and only on the count's trailing side —
+            // so the old 6 made the gap inside the capsule wider than the
+            // capsule's own end insets, and the pair read as two things placed
+            // near each other rather than one item. Letting the button's padding
+            // be the whole separation is also the value that cannot go stale:
+            // it is the system's, not a number matched to today's metrics.
+            HStack(spacing: 0) {
                 Text(count(model.overrideCount, "override"))
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
+                    // Balances the button's own trailing padding at the other
+                    // end. Measured by tinting both children and reading their
+                    // frames off a running window: the item's glass container
+                    // insets its contents by ~7pt, and the button's frame is
+                    // ~7pt wider than its glyph on each side. Those stack only
+                    // on the trailing edge, so without this the interior runs
+                    // 7 / 7 / 14 — the arrow sitting with twice the room the
+                    // count gets — and the item reads as leaning left. With it,
+                    // 14 / 7 / 14: symmetric ends, and a gap tighter than both,
+                    // which is what makes the count and the arrow read as one
+                    // item rather than two.
+                    .padding(.leading, 7)
                 Button {
                     model.resetAllOverrides()
                 } label: {
