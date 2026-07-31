@@ -94,6 +94,39 @@ struct SidebarView: View {
     }
 }
 
+/// A hover wash for the sidebar rows that carry a context menu.
+///
+/// Rows no longer show a control of their own — the layout setting moved to a
+/// right-click — so a still row gives the pointer nothing back and reads as
+/// inert text, which does not invite the right-click that is now its only
+/// affordance. This is what says otherwise, and it is drawn **only on rows that
+/// actually do something**, so lighting up is itself the signal that a menu is
+/// there. (`MutedRow` and `AllItemsRow` have no menu and stay dark.)
+///
+/// Suppressed while the row is selected: the selection highlight already owns
+/// the row, and stacking a wash on top of it only muddies the colour.
+fileprivate struct RowHover: ViewModifier {
+    let isSelected: Bool
+    @State private var hovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.primary.opacity(hovering && !isSelected ? 0.07 : 0))
+            }
+            .onHover { hovering = $0 }
+    }
+}
+
+extension View {
+    /// See `RowHover`. Apply **after** the row's `contentShape`, so the whole
+    /// row lights up rather than just the text.
+    fileprivate func rowHover(selected: Bool) -> some View {
+        modifier(RowHover(isSelected: selected))
+    }
+}
+
 /// A sidebar section header carrying the group-level layout override for one
 /// media kind. Three states: an untouched group defers to the global rather than
 /// pinning a mode, so setting the toolbar picker still moves everything.
@@ -175,6 +208,7 @@ struct ShowRow: View {
         // right-click. A shape, not a gesture — it does not re-open the
         // left-click contention described above.
         .contentShape(Rectangle())
+        .rowHover(selected: model.selection == .item(node.source))
         .contextMenu { ItemLayoutMenu(node: node, model: model) }
     }
 }
@@ -206,6 +240,8 @@ struct SeasonRow: View {
         }
         .padding(.vertical, 1)
         .contentShape(Rectangle())
+        .rowHover(selected: model.selection == .season(show: show.source,
+                                                       number: slice.number))
         // No layout mark of its own — a season never carries a setting. But the
         // menu targets the parent show and says whose layout it is changing,
         // because a right-click that produced nothing here would teach the user
@@ -260,6 +296,7 @@ struct SidebarRow: View {
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())
+        .rowHover(selected: model.selection == .item(node.source))
         .contextMenu { ItemLayoutMenu(node: node, model: model) }
     }
 }
@@ -303,6 +340,7 @@ struct PinnedRow: View {
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())
+        .rowHover(selected: model.selection == .item(node.source))
         .contextMenu { ItemLayoutMenu(node: node, model: model) }
     }
 }
