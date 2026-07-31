@@ -9,11 +9,19 @@ import RenamerCore
 /// and the two modes always read as siblings rather than as a default and an
 /// exception.
 extension OutputMode {
-    /// Short name, for a control segment or a menu item.
+    /// The one word this mode is called, everywhere: control segments, menu
+    /// items, row chips, destination bands, the confirmation dialog.
+    ///
+    /// It names the **result**, not the setting — what the folder ends up
+    /// looking like — which is why there is only one word rather than a separate
+    /// control name and badge word. The engine's own case names (`organise` /
+    /// `renameOnly`) are API and stay as they are; "Rename only" was a slightly
+    /// false label for the UI anyway, since flat mode also *moves* files up out
+    /// of subfolders and removes the emptied ones.
     var name: String {
         switch self {
-        case .organise:   return "Organise"
-        case .renameOnly: return "Rename only"
+        case .organise:   return "Folders"
+        case .renameOnly: return "Flat"
         }
     }
 
@@ -23,15 +31,6 @@ extension OutputMode {
         switch self {
         case .organise:   return "into Show/Season and Movie (Year) folders"
         case .renameOnly: return "directly into the chosen folder, with no folder tree"
-        }
-    }
-
-    /// The one-word row badge — what the *result* looks like, not what the
-    /// setting is called.
-    var badgeWord: String {
-        switch self {
-        case .organise:   return "folders"
-        case .renameOnly: return "flat"
         }
     }
 
@@ -67,7 +66,7 @@ struct ModeBadge: View {
     var body: some View {
         HStack(spacing: 3) {
             Image(systemName: mode.symbol)
-            Text(mode.badgeWord)
+            Text(mode.name)
         }
         .font(.caption2)
         .fontWeight(explicit ? .semibold : .regular)
@@ -99,10 +98,10 @@ struct GlobalModePicker: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(width: 190)
+            .frame(width: 140)
         }
         .help("How every item is laid out under the chosen folder. "
-              + "TV, Movies, and individual items can override this.")
+              + "The TV and Movies headers, and each row, can override this.")
     }
 }
 

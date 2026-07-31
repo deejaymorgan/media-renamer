@@ -76,7 +76,7 @@ struct ContentView: View {
             return "No folder chosen"
         }
         let n = plan.nodes.filter { $0.status == .rename }.count
-        return "\(url.path) · \(n) items"
+        return "\(url.path) · \(count(n, "item"))"
     }
 
     // MARK: - The apply guard
@@ -93,8 +93,8 @@ struct ContentView: View {
     private var applyTitle: String {
         let (organise, flat) = model.fileCountsByMode
         if organise > 0 && flat > 0 { return "Apply — mixed layout?" }
-        if flat > 0 { return "Apply — rename only, no folder tree?" }
-        return "Apply — organise into folders?"
+        if flat > 0 { return "Apply — flat, no folder tree?" }
+        return "Apply — into folders?"
     }
 
     private var applyPrompt: String {
@@ -147,9 +147,13 @@ struct ContentView: View {
         }
     }
 
-    private func count(_ n: Int, _ noun: String) -> String {
-        "\(n) \(noun)\(n == 1 ? "" : "s")"
-    }
+}
+
+/// "1 file" / "12 files". File-scope so the bottom bar and the window subtitle
+/// pluralise through the same helper the confirmation dialog does, rather than
+/// hardcoding an "s" and reading "1 files".
+private func count(_ n: Int, _ noun: String) -> String {
+    "\(n) \(noun)\(n == 1 ? "" : "s")"
 }
 
 // MARK: - Summary chips (bottom bar, leading)
@@ -227,7 +231,7 @@ struct BottomBar: View {
             .reduce(0) { $0 + $1.previewPairs.count }
         let junk = model.junkToTrash.count
         if moves == 0 && junk == 0 { return "Nothing to apply." }
-        return "\(moves) files will move · \(junk) junk to Trash"
+        return "\(count(moves, "file")) will move · \(count(junk, "junk file")) to Trash"
     }
 }
 

@@ -384,10 +384,14 @@ private func groupedByFolder(_ pairs: [PreviewPair]) -> [(folder: String, pairs:
 /// Folders read distinctly from the files beneath them: a filled folder glyph,
 /// a quaternary fill, and the show/season crumbs joined by a muted "›".
 ///
-/// A flattened group keeps the same band — same fill, same shape — and changes
-/// only its glyph and a muted tag. Dropping the band for flat items would make a
-/// mixed plan unreadable: every group has to state where it lands, or a flat
-/// group and an organised one look identical.
+/// A flat group keeps the same band — same fill, same shape — and differs by its
+/// glyph, its tint, and naming the folder the files land in. Dropping the band
+/// for flat items would make a mixed plan unreadable: every group has to state
+/// where it lands, or a flat group and an organised one look identical.
+///
+/// It used to carry a muted "flattened" tag as well. That was a third vocabulary
+/// for a distinction the glyph and tint already draw, and the word appeared
+/// nowhere else in the app.
 private struct FolderBand: View {
     let crumb: String
     var flattened = false
@@ -397,19 +401,13 @@ private struct FolderBand: View {
             Image(systemName: flattened ? "tray.full.fill" : "folder.fill")
                 .foregroundStyle(flattened ? Palette.mode : .blue)
             crumbText
-            if flattened {
-                Text("flattened")
-                    .font(.caption2).foregroundStyle(.secondary)
-                    .padding(.horizontal, 5).padding(.vertical, 1)
-                    .background(.quaternary.opacity(0.6), in: Capsule())
-            }
         }
         .font(.callout)
         .padding(.horizontal, 10).padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
         .help(flattened
-              ? "Rename only — these files land directly in “\(crumb)”, with no folder tree."
+              ? "Flat — these files land directly in “\(crumb)”, with no folder tree."
               : "These files land in “\(crumb)”.")
     }
 
