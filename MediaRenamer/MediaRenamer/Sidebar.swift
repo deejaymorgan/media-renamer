@@ -9,7 +9,8 @@ struct SidebarView: View {
             if let plan = model.plan {
                 let g = PlanGroups(plan)
 
-                AllItemsRow(count: g.tvRename.count + g.movieRename.count)
+                AllItemsRow(count: g.tvRename.count + g.movieRename.count,
+                            selected: model.selection == .all)
                     .tag(Selection.all)
 
                 // The section also renders when the group is EMPTY but carries an
@@ -94,14 +95,17 @@ struct SidebarView: View {
     }
 }
 
-/// A hover wash for the sidebar rows that carry a context menu.
+/// A hover wash for every sidebar row that responds to a click.
 ///
-/// Rows no longer show a control of their own — the layout setting moved to a
-/// right-click — so a still row gives the pointer nothing back and reads as
-/// inert text, which does not invite the right-click that is now its only
-/// affordance. This is what says otherwise, and it is drawn **only on rows that
-/// actually do something**, so lighting up is itself the signal that a menu is
-/// there. (`MutedRow` and `AllItemsRow` have no menu and stay dark.)
+/// The whole list used to sit dead under the pointer, which was survivable while
+/// each row carried a chip that lit up on its own. It is not survivable now that
+/// the layout setting has moved to a right-click: a list that never reacts reads
+/// as text, and text does not invite a right-click.
+///
+/// Applied to everything **selectable** — "All items" and the show/movie/season/
+/// pinned rows. Only `MutedRow` stays dark, because it is genuinely inert: not
+/// selectable, no menu, nothing to click. So the wash means "this row does
+/// something", which is the property that makes it worth drawing.
 ///
 /// Suppressed while the row is selected: the selection highlight already owns
 /// the row, and stacking a wash on top of it only muddies the colour.
@@ -255,6 +259,7 @@ struct SeasonRow: View {
 
 struct AllItemsRow: View {
     let count: Int
+    var selected = false
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "square.stack.3d.up").foregroundStyle(.secondary)
@@ -268,6 +273,8 @@ struct AllItemsRow: View {
                 .monospacedDigit()
         }
         .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .rowHover(selected: selected)
     }
 }
 
