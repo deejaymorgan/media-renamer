@@ -109,16 +109,21 @@ struct SidebarView: View {
 ///
 /// Suppressed while the row is selected: the selection highlight already owns
 /// the row, and stacking a wash on top of it only muddies the colour.
+///
+/// Drawn as a **row background**, not a background on the row's content. The
+/// content is inset from the row, so a wash on it lands narrower than the
+/// selection capsule and the two read as different shapes; `listRowBackground`
+/// is scoped to the same rect the selection uses.
 fileprivate struct RowHover: ViewModifier {
     let isSelected: Bool
     @State private var hovering = false
 
     func body(content: Content) -> some View {
         content
-            .background {
+            .listRowBackground(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.primary.opacity(hovering && !isSelected ? 0.07 : 0))
-            }
+                    .fill(Color.primary.opacity(hovering && !isSelected ? 0.12 : 0))
+            )
             .onHover { hovering = $0 }
     }
 }
