@@ -111,7 +111,8 @@ struct InspectorView: View {
                     Image(systemName: node.mediaType == .tv ? "tv" : "film")
                         .foregroundStyle(.secondary)
                     Text(node.displayTitle).font(.headline)
-                    // Reported, not set: layout is chosen on the sidebar row.
+                    // Reported, not set: layout is chosen from the sidebar row's
+                    // context menu, or View ▸ Layout.
                     ModeBadge(mode: node.outputMode,
                               explicit: model.itemOverride(for: node.source) != .inherit)
                     FlagBadges(node: node, conflicts: conflicts)
@@ -176,10 +177,11 @@ struct SeasonInspectorView: View {
                     EditFields(node: node, model: model).id(node.source)
                     // One override per show, never per season: flattening collapses
                     // every season into the same folder, so a per-season setting
-                    // would change nothing visible. Layout is set on the show's
+                    // would change nothing visible. Layout is set from the show's
                     // sidebar row, which is the level it applies at.
                     Text("Editing the title updates every season of this show. "
-                         + "Layout is set on the show’s row in the sidebar.")
+                         + "To set its layout, right-click the show’s row in the "
+                         + "sidebar, or use View ▸ Layout.")
                         .font(.caption2).foregroundStyle(.secondary)
                     TitleVerifyNote(node: node)
                 }
@@ -294,14 +296,17 @@ struct AllCard: View {
                     Spacer()
                     ModeBadge(mode: node.outputMode,
                               explicit: model.itemOverride(for: node.source) != .inherit)
-                    FlagBadges(node: node, conflicts: conflicts, compact: true)
+                    // Not compact: this is a ~630pt card, not a 218pt row, and
+                    // the ModeBadge beside it spells its mode out in full.
+                    FlagBadges(node: node, conflicts: conflicts)
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
             // Always-editable fields (don't toggle the card). Layout is not among
-            // them: it is set on the sidebar row, and this badge reports it.
+            // them: it is set from the sidebar row's context menu (or View ▸
+            // Layout), and this badge reports it.
             EditFields(node: node, model: model).id(node.source)
 
             if isExpanded {

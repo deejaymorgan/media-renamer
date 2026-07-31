@@ -96,10 +96,10 @@ media-renamer/
       MediaRenamerApp.swift         # @main App
       AppModel.swift                # @Observable document model (choose/replan/resolve/apply)
       ContentView.swift             # NavigationSplitView shell + toolbar + bottom apply bar
-      Sidebar.swift                 # source list (All / TV / Movies / Unchanged / Skipped) + layout chips + flag badges
+      Sidebar.swift                 # source list (All / TV / Movies / Unchanged / Skipped) + layout marks/menus + flag badges
       Inspector.swift               # detail: editable fields, results, junk toggles, conflict resolver
       AcronymBar.swift              # acronym keep/Title chips
-      OutputModeUI.swift            # mode vocabulary/colour/glyph, the layout chip, global picker
+      OutputModeUI.swift            # mode vocabulary/colour/glyph, the layout chip/badge/picker, global picker
       Palette.swift                 # colour legend (categories + the two layout tints)
       Assets.xcassets
   SPEC.md  README.md  .gitignore
@@ -224,15 +224,27 @@ Verbatim behaviour from the earlier Python engine, pinned by parity tests:
     **survive an Apply** — the only edit layer that does — because applying in
     several passes over one staging folder is the workflow they serve.
   - Because the default flattens, the active mode is stated in the toolbar, on
-    every sidebar row, on each preview group's destination band, and in the
-    confirmation dialog (which also counts the source folders that will
-    disappear) — with **equal weight in both directions**, so neither mode is
-    the one you click through.
+    **any sidebar row whose layout differs from the toolbar's**, on each preview
+    group's destination band, and in the confirmation dialog (which also counts
+    the source folders that will disappear) — with **equal weight in both
+    directions**, so neither mode is the one you click through. The toolbar
+    states the global mode permanently and never scrolls, so a row only has to
+    speak when it is an exception to it: when it pins a mode of its own, or when
+    its group does. A plan with no overrides carries no row marks at all, and you
+    still cannot apply the wrong mode without being told.
   - All three levels are set **in the sidebar**: toolbar for the whole plan,
-    section header for a media kind, row for one item. One chip component serves
-    all of them, drawing a pinned level differently from an inheriting one. The
-    inspector reports the resolved mode and does not set it — the cascade reads
-    as one control at three scopes rather than two panes' worth of settings.
+    section header for a media kind, and — for one item — the **row's context
+    menu**, mirrored as **View ▸ Layout** on the selection (a season row's menu
+    targets its parent show, since layout is show-scoped). The row itself carries
+    a passive mark, not a control: a row shows state, and a three-way setting on
+    every row would be a control below the HIG's 20×20pt minimum sitting
+    unannounced among the `dup`/junk/verify status badges. Headers draw glyph +
+    word + chevron and act as the legend; row marks draw the **glyph alone**, so
+    both modes are one width and every mark shares one left and one right edge.
+    The pinned-vs-inheriting distinction (bordered and filled vs a soft wash)
+    holds on both. The inspector reports the resolved mode and does not set it —
+    the cascade reads as one setting at three scopes rather than two panes' worth
+    of settings.
   - Overrides are easy to lose track of (they survive an Apply, and an emptied
     group keeps its section on screen just to stay reachable), so the toolbar
     carries an **overrides count and a Reset All**, mirrored in the View menu.
