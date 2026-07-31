@@ -121,11 +121,26 @@ fileprivate struct RowHover: ViewModifier {
     func body(content: Content) -> some View {
         content
             .listRowBackground(
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: RowHover.selectionRadius)
                     .fill(Color.primary.opacity(hovering && !isSelected ? 0.12 : 0))
+                    .padding(.horizontal, RowHover.selectionInset)
             )
             .onHover { hovering = $0 }
     }
+
+    /// How far the system insets a sidebar row's selection capsule from the row
+    /// rect. `listRowBackground` fills the whole row, so without this the wash
+    /// lands wider than the selection on both sides and the two read as
+    /// different shapes — visible the moment a hovered row sits next to a
+    /// selected one. Not a public metric, so it is matched by eye against a
+    /// running window rather than derived; re-check it if a future macOS moves
+    /// the capsule.
+    static let selectionInset: CGFloat = 10
+
+    /// The capsule's corner radius, matched the same way and for the same
+    /// reason: at 6 the wash was visibly squarer than the selection it sits
+    /// beside.
+    static let selectionRadius: CGFloat = 8
 }
 
 extension View {

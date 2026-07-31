@@ -364,22 +364,33 @@ struct ItemLayoutMenu: View {
 /// VoiceOver announced as a second one. Do not add a visible caption back — see
 /// above for what it renders as.
 ///
-/// **Open, deliberately unresolved: should the segments carry the mode glyph?**
-/// The sidebar's row marks are glyph-only, so the glyph→mode pairing has to be
-/// taught somewhere permanent, and this item is the only layout surface that
-/// never scrolls — `List` section headers do not stick (probed:
-/// `floatsGroupRows == false`), so the header chip is off screen on exactly the
-/// scrolled-override screen the marks exist for. `Label(mode.name, systemImage:
-/// mode.symbol)` is the obvious candidate and costs ~18pt a segment against the
-/// ~110pt of headroom the 1040 floor leaves. It is **not** applied, because a
-/// segmented `Picker` is `NSSegmentedControl`-backed and will not rasterise
-/// through `ImageRenderer`, so the offscreen probe that settled every other
-/// question here cannot say whether macOS renders the label as glyph + word,
-/// text-only, or **glyph-only** — and glyph-only is precisely what 39a37bd
-/// rejected, since it would reverse 1059d8e's rule that the layout words appear
-/// on every surface, segments included. One look at a running build decides it;
-/// guessing does not. Until then the pairing is carried by the mark's tooltip,
-/// the inspector badge, the section-header chip and the destination band.
+/// **The segments are words only, and not for want of trying.** Adding the mode
+/// glyph here was wanted: the sidebar's row marks are glyph-only, so the
+/// glyph→mode pairing needs teaching somewhere permanent, and this is the only
+/// layout surface that never scrolls — `List` section headers do not stick
+/// (probed: `floatsGroupRows == false`), so the header chip is off screen on
+/// exactly the scrolled-override screen the marks exist for.
+///
+/// A macOS segmented `Picker` will not draw a glyph and a word in one segment.
+/// Three constructions, all built and read off a running window (2026-08-01):
+///
+/// | segment content | renders as |
+/// |---|---|
+/// | `Label(name, systemImage:)` | **icon only** — the words vanish |
+/// | the same, `.labelStyle(.titleAndIcon)` | **text only** — the glyph vanishes |
+/// | `HStack { Image; Text }` | **mangled** — the glyph is promoted to its own third segment |
+///
+/// Icon-only is the one outcome 39a37bd explicitly rejected, since it reverses
+/// 1059d8e's rule that the layout words appear on every surface, segments
+/// included; so words win and the glyph does not appear here. Do not retry this
+/// with another label style — the control is `NSSegmentedControl` underneath and
+/// takes one of title *or* image per segment. Reaching glyph + word would mean
+/// bridging to AppKit for a real `NSSegmentedControl`, which buys a legend at the
+/// cost of the "one system control per toolbar item" rule.
+///
+/// The pairing is carried instead by the mark's tooltip, the inspector badge,
+/// the section-header chip and the destination band — all of which draw glyph
+/// and word together.
 struct GlobalModePicker: View {
     let model: AppModel
 
@@ -389,6 +400,18 @@ struct GlobalModePicker: View {
             set: { model.setGlobalMode($0) }
         )) {
             ForEach(OutputMode.allCases, id: \.self) { mode in
+                // Glyph *and* word. The sidebar's row marks are glyph-only —
+                // four capsules repeating one word is noise — which leaves the
+                // glyph→mode pairing to be taught somewhere permanent, and the
+                // section-header chip cannot be that somewhere: macOS `List`
+                // headers do not stick (probed: `floatsGroupRows == false`), so
+                // on the one screen the marks exist for — an override, scrolled
+                // — the legend is off screen by construction. This item never
+                // scrolls, so it is the legend. Teach the pairing where there is
+                // room, abbreviate where there is not; Finder tags and Mail
+                // flags do the same. Not the icon-only segments 39a37bd
+                // rejected: the word stays in both, so 1059d8e's rule that the
+                // layout words appear on every surface still holds literally.
                 Text(mode.name).tag(mode)
             }
         }
