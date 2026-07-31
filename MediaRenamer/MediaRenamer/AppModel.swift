@@ -200,6 +200,53 @@ final class AppModel {
             .mode(for: node.source, mediaType: node.mediaType)
     }
 
+    /// Whether a sidebar row has to state its own layout: **iff the toolbar
+    /// alone would not tell you what it is** — the node pins a mode of its own,
+    /// or its group does. On a plan where nothing overrides, that is no marks at
+    /// all; the toolbar picker already says everything there is to say, and a
+    /// mark on every row would repeat it thirteen times for no bits.
+    ///
+    /// The second disjunct is not redundant with the first. macOS `List` section
+    /// headers do not stick (probed: `floatsGroupRows == false`), so setting the
+    /// TV header to Folders and scrolling past it leaves rows that resolve to
+    /// Folders under a toolbar reading Flat — an absence would read as a
+    /// contradiction. The toolbar is the one layout statement that never
+    /// scrolls, which is what an exception marker needs as its reference.
+    ///
+    /// **That reference is an invariant, not a given.** This rule is only safe
+    /// while the toolbar picker is guaranteed to be on screen, and what
+    /// guarantees it is the sidebar column cap (`max: 420`) and the window floor
+    /// (`minWidth: 1040`) in `ContentView.body` — measured, both trailing
+    /// toolbar items need roughly `sidebar + 510` points of window, so the cap
+    /// puts the true floor at ~930. Raise the cap or drop the floor and the
+    /// picker collapses into a `»` overflow menu; on an un-overridden plan the
+    /// active layout would then be stated **nowhere** in the main window, since
+    /// this method is suppressing every row mark on the strength of it. Those
+    /// two numbers are load-bearing for layout visibility, not window tuning.
+    ///
+    /// One helper rather than the expression inlined three times, so every row
+    /// type — and anything added later — agrees by construction.
+    func statesOwnLayout(_ node: NodePlan) -> Bool {
+        itemOverride(for: node.source) != .inherit
+            || inheritedMode(for: node) != globalMode
+    }
+
+    /// The node an item-level layout command acts on for the current selection:
+    /// the selected item, or a selected season's parent **show** — layout is
+    /// show-scoped, never per season. Nil for "All items" and for no selection,
+    /// neither of which names one item (the group and global rungs keep their
+    /// own controls).
+    var selectedLayoutTarget: NodePlan? {
+        guard let plan, let selection else { return nil }
+        let source: URL
+        switch selection {
+        case .all:                    return nil
+        case .item(let url):          source = url
+        case .season(let show, _):    source = show
+        }
+        return plan.nodes.first { $0.source == source }
+    }
+
     /// Whether the sidebar offers this node as a selectable row: everything being
     /// renamed, plus an `.unchanged` node still pinned by an explicit override.
     ///

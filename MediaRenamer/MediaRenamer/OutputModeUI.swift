@@ -90,6 +90,14 @@ private struct ModeChipFace: View {
     let mode: OutputMode
     /// Set deliberately at this level, rather than inherited from above.
     let pinned: Bool
+    /// Draw the mode's word beside its glyph. Sidebar row marks drop it: four
+    /// capsules repeating one word is noise, and glyph-only makes both modes the
+    /// same width, so every mark in the list shares a left *and* a right edge
+    /// with no reserved slot. The section header directly above keeps glyph +
+    /// word and acts as the legend; the word also survives in the tooltip, the
+    /// accessibility value, the destination band, the inspector and the Apply
+    /// dialog.
+    var showsWord = true
     /// Reserve and draw a disclosure chevron. A chip that never moves reads as a
     /// badge — which is exactly why the item control went unnoticed in the
     /// inspector — so the interactive one always shows its chevron and brightens
@@ -100,7 +108,11 @@ private struct ModeChipFace: View {
     var body: some View {
         HStack(spacing: 3) {
             Image(systemName: mode.symbol)
-            Text(mode.name)
+            if showsWord {
+                // Without these the word wraps under compression: at the 250pt
+                // minimum column the chip collapses to "≡ … ⌄".
+                Text(mode.name).lineLimit(1).fixedSize()
+            }
             if interactive {
                 Image(systemName: "chevron.down")
                     .opacity(hovering ? 0.9 : 0.4)
@@ -119,6 +131,16 @@ private struct ModeChipFace: View {
                                            lineWidth: 1)
                 )
         }
+        // The face holds its intrinsic size rather than accepting a squeeze.
+        // Measured: under a narrow proposal it otherwise wraps and deforms
+        // (43 × 95 at a 30pt proposal); with this it stays 79 × 17 and the
+        // neighbouring title truncates instead, which is the right trade in
+        // every placement. It sits on the *face*, not on `ModeChip`, so the
+        // passive `ModeBadge` — which lives in width-constrained sidebar rows
+        // and never opens a menu — inherits the same guard. Load-bearing under
+        // `ModeChip` in particular: there the drawn face *is* the hit target,
+        // so a container-driven distortion of the face distorts the target.
+        .fixedSize()
     }
 
     private var fill: Double {
@@ -128,38 +150,92 @@ private struct ModeChipFace: View {
 }
 
 /// A read-only layout indicator, for the surfaces that report the mode rather
-/// than set it: the inspector header and the All-items cards.
+/// than set it: the inspector header, the All-items cards, and the sidebar rows
+/// (where it is the *mark*, and the setting lives in the row's context menu).
+///
+/// Never clickable, on any surface. That is the point of splitting it from
+/// `ModeChip`: a sidebar row's trailing gutter is a status area — `dup`, `N
+/// junk`, verify — and a control mixed in among them, at the same size and with
+/// no visual rule separating the categories, leaves the eye unable to tell which
+/// of the four things it can press.
 struct ModeBadge: View {
     let mode: OutputMode
     var explicit = false
+    /// Glyph only, no word. See `ModeChipFace.showsWord` — the word is never
+    /// lost, only moved to the tooltip and the accessibility value.
+    var showsWord = true
 
     var body: some View {
-        ModeChipFace(mode: mode, pinned: explicit)
+        ModeChipFace(mode: mode, pinned: explicit, showsWord: showsWord)
             .accessibilityElement()
             .accessibilityLabel("Layout")
+            // These two name the mode in full whether or not the word is drawn.
+            // For a glyph-only mark they are where the word actually lives, so
+            // `.help` goes *outside* `.accessibilityElement()`, which would
+            // otherwise ignore the hint it contributes.
             .accessibilityValue(explicit ? "\(mode.name), set here" : "\(mode.name), inherited")
+            .help(explicit
+                  ? "Layout set here — \(mode.name). Files land \(mode.detail)."
+                  : "Layout inherited — \(mode.name). Files land \(mode.detail).")
     }
 }
 
-/// The three-state layout control: defer to the level above, or pin one of the
-/// two modes. `Inherit` names the mode it currently resolves to, so choosing to
-/// defer never leaves the outcome unstated.
+/// The three layout choices as a bare picker: defer to the level above, or pin
+/// one of the two modes. `Inherit` names the mode it currently resolves to, so
+/// choosing to defer never leaves the outcome unstated.
 ///
-/// **One component at both densities.** The sidebar section headers (group
-/// level) and the show/movie rows (item level) render the same chip, because a
-/// row control that looked different from the header control would read as a
-/// different kind of thing — and the point of putting them in one place is that
-/// they are one thing at three scopes.
+/// Extracted so the chip's menu, a sidebar row's context menu and View ▸ Layout
+/// render **one** control rather than three copies to keep in step. `.inline`
+/// draws correctly in all three on macOS 14.
+struct LayoutPicker: View {
+    let current: ModeOverride
+    /// The mode `.inherit` resolves to for this group/item right now.
+    let inherited: OutputMode
+    let set: (ModeOverride) -> Void
+
+    var body: some View {
+        Picker("Layout", selection: Binding(get: { current }, set: set)) {
+            Text("Inherit — \(inherited.name)").tag(ModeOverride.inherit)
+            Text(OutputMode.organise.name).tag(ModeOverride.organise)
+            Text(OutputMode.renameOnly.name).tag(ModeOverride.renameOnly)
+        }
+        .pickerStyle(.inline)
+    }
+}
+
+/// The three-state layout control as a chip: defer to the level above, or pin
+/// one of the two modes.
 ///
-/// **The menu is an invisible overlay, not the chip's label.** A `Menu`
-/// restyles its label as button content and drops the tint and the capsule with
-/// it — that is a property of this codebase, observed when the control was first
-/// built, and it is why the old version had to keep its badge outside the menu
-/// and settle for a 16pt chevron as the only clickable part. Laying a
-/// clear-labelled menu over an ordinary chip sidesteps the question rather than
-/// betting on a menu style: the label has no styling left to lose, the chip
-/// renders exactly as `ModeBadge` does, and the click target is the whole
-/// capsule.
+/// **The group rung only.** Section headers render this; rows do not. A row is a
+/// place to *show* state, not to *set* a three-way setting — and this chip is
+/// ~16pt tall against the HIG's 20×20pt minimum for a macOS control, which a
+/// header can carry (it holds nothing else) and a row cannot justify. So rows
+/// carry a passive `ModeBadge` and reach the setting through their context menu
+/// and View ▸ Layout, while the header chip stays interactive and doubles as the
+/// standing worked example of the control's shape and vocabulary for the marks
+/// below it.
+///
+/// **The chip is the menu's own label.** The obvious reading of the earlier
+/// problem — "a `Menu` restyles its label and drops the tint and the capsule" —
+/// was half right, and the half it got wrong cost the control its hit target.
+/// The styling *is* destroyed by `.menuStyle(.borderlessButton)`, and by
+/// `.menuStyle(.button)` without a button style; it survives intact under
+/// `.menuStyle(.button)` + `.buttonStyle(.plain)`, which is therefore
+/// load-bearing rather than cosmetic. Laying a clear-labelled menu *over* the
+/// chip looked like a way to sidestep that question, but an overlay is a second
+/// layout pass sized by its container rather than by the shape underneath, and a
+/// bare `Shape` has no intrinsic size to give it: the clickable region measured
+/// **6 × 14pt inside a 78.75 × 17pt capsule** — about 6% of what was drawn, dead
+/// centre. Against the HIG's 20 × 20pt minimum that is not a small target, it is
+/// a broken one, and `.onHover` brightening the *whole* capsule meant the chip
+/// actively lied about where to click.
+///
+/// So the face is the label and the target is the drawn shape by construction.
+/// `.contentShape(Rectangle())` rather than `Capsule()` deliberately: the hover
+/// frame is rectangular, and matching it exactly is worth more than the ~2pt
+/// corner slivers a capsule would (honestly) exclude. No invisible halo — in a
+/// dense row a halo steals clicks from its neighbours; if the target is ever
+/// judged too small, grow the *drawn* chip.
 struct ModeChip: View {
     let current: ModeOverride
     /// The mode `.inherit` resolves to for this group/item right now.
@@ -172,22 +248,18 @@ struct ModeChip: View {
     private var pinned: Bool { current != .inherit }
 
     var body: some View {
-        ModeChipFace(mode: effective, pinned: pinned,
-                     interactive: true, hovering: hovering)
-            .overlay {
-                Menu {
-                    Picker("Layout", selection: Binding(get: { current }, set: set)) {
-                        Text("Inherit — \(inherited.name)").tag(ModeOverride.inherit)
-                        Text(OutputMode.organise.name).tag(ModeOverride.organise)
-                        Text(OutputMode.renameOnly.name).tag(ModeOverride.renameOnly)
-                    }
-                    .pickerStyle(.inline)
-                } label: {
-                    Rectangle().fill(.clear).contentShape(Rectangle())
-                }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-            }
+        Menu {
+            LayoutPicker(current: current, inherited: inherited, set: set)
+        } label: {
+            ModeChipFace(mode: effective, pinned: pinned,
+                         interactive: true, hovering: hovering)
+                .contentShape(Rectangle())
+        }
+            .menuStyle(.button)
+            // Not optional. Without it the chip is redrawn as a bordered push
+            // button and the face stops being what you press. See above.
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
             .onHover { hovering = $0 }
             .help(pinned
                   ? "Layout set here — \(effective.name). Files land \(effective.detail). Choose “Inherit” to clear it."
@@ -198,17 +270,58 @@ struct ModeChip: View {
     }
 }
 
-/// The row-level layout control, wired to one node's slot in the cascade. Every
-/// sidebar row that can carry an override renders this, so the three of them
-/// cannot drift apart.
-struct ItemModeChip: View {
+/// The row-level layout **mark**: the resolved mode's glyph, and only on a row
+/// whose layout the toolbar does not already state (`AppModel.statesOwnLayout`).
+/// Passive — it joins `dup`, `N junk` and verify as one consistent category of
+/// inert status, which is what lets the gutter be read at a glance.
+///
+/// Every row that can carry an override renders this, so the three of them
+/// cannot drift apart. `PinnedRow` is the deliberate exception: see there.
+struct ItemModeMark: View {
     let node: NodePlan
     let model: AppModel
 
+    @ViewBuilder
     var body: some View {
-        ModeChip(current: model.itemOverride(for: node.source),
-                 inherited: model.inheritedMode(for: node),
-                 set: { model.setItemOverride($0, for: node.source) })
+        if model.statesOwnLayout(node) {
+            ModeBadge(mode: node.outputMode,
+                      explicit: model.itemOverride(for: node.source) != .inherit,
+                      showsWord: false)
+        }
+    }
+}
+
+/// The row-level layout **control**, in its new home: a `Layout ▸` submenu in
+/// the row's context menu, mirrored by View ▸ Layout on the selection.
+///
+/// Right-click is a legitimate primary home on macOS precisely because the HIG
+/// requires the mirror — *"always make context menu items available in the main
+/// interface, too"* — so the pair is more idiomatic than a control on every row,
+/// not less. It is also what Mail does with mailbox behaviours and Finder with
+/// tags: the row shows state, the menus set it.
+struct ItemLayoutMenu: View {
+    let node: NodePlan
+    let model: AppModel
+    /// What the submenu is called. **Required, with no default** — every caller
+    /// must say what it is about to change. Season rows have to, because layout
+    /// is show-scoped (one override per show, never per season) and a bare
+    /// "Layout" there would misstate what it reaches. Item rows have to for a
+    /// subtler reason: a right-click does not necessarily move `List` selection,
+    /// so this menu and its View ▸ Layout mirror can be pointed at different
+    /// nodes at the same instant, and only one of them saying so is how a user
+    /// changes the mode on a row they were not looking at. Naming the target also
+    /// puts the axis word "Layout" one right-click away on every row, which is
+    /// where it earns its keep now that no surface draws it at rest.
+    let title: String
+
+    var body: some View {
+        Menu(title) {
+            LayoutPicker(
+                current: model.itemOverride(for: node.source),
+                inherited: model.inheritedMode(for: node),
+                set: { model.setItemOverride($0, for: node.source) }
+            )
+        }
     }
 }
 
@@ -217,6 +330,15 @@ struct ItemModeChip: View {
 /// The plan-wide layout. Two states, both always visible, so the active one is
 /// legible at a glance rather than hidden behind a menu. Rendered only once a
 /// folder is loaded — there is nothing to lay out before that.
+///
+/// **One hit target per toolbar item, sized by the system.** The rule is about
+/// what can be *pressed*, not about how many views are present: the sibling
+/// `OverridesIndicator` pairs an inert count with one button in a single item and
+/// satisfies it, because the count is a status string and not a second control.
+/// (Merging the two into one wide `Label` button would break the rule the other
+/// way, by giving an action with no undo a 114pt target.) What the toolbar's
+/// control metrics and its overflow arithmetic care about is the pressable
+/// region, so that is what the rule counts.
 ///
 /// **The item is the control and nothing else.** On macOS 26 the segmented
 /// picker draws no border of its own — no dividers, no surrounding capsule, just
@@ -239,7 +361,25 @@ struct ItemModeChip: View {
 /// **Dropping the caption improved accessibility rather than costing it.**
 /// `.labelsHidden()` does not affect accessibility, so the picker keeps its own
 /// "Layout" label; the decorative `Text` was an unassociated static string that
-/// VoiceOver announced as a second one.
+/// VoiceOver announced as a second one. Do not add a visible caption back — see
+/// above for what it renders as.
+///
+/// **Open, deliberately unresolved: should the segments carry the mode glyph?**
+/// The sidebar's row marks are glyph-only, so the glyph→mode pairing has to be
+/// taught somewhere permanent, and this item is the only layout surface that
+/// never scrolls — `List` section headers do not stick (probed:
+/// `floatsGroupRows == false`), so the header chip is off screen on exactly the
+/// scrolled-override screen the marks exist for. `Label(mode.name, systemImage:
+/// mode.symbol)` is the obvious candidate and costs ~18pt a segment against the
+/// ~110pt of headroom the 1040 floor leaves. It is **not** applied, because a
+/// segmented `Picker` is `NSSegmentedControl`-backed and will not rasterise
+/// through `ImageRenderer`, so the offscreen probe that settled every other
+/// question here cannot say whether macOS renders the label as glyph + word,
+/// text-only, or **glyph-only** — and glyph-only is precisely what 39a37bd
+/// rejected, since it would reverse 1059d8e's rule that the layout words appear
+/// on every surface, segments included. One look at a running build decides it;
+/// guessing does not. Until then the pairing is carried by the mark's tooltip,
+/// the inspector badge, the section-header chip and the destination band.
 struct GlobalModePicker: View {
     let model: AppModel
 
@@ -254,8 +394,14 @@ struct GlobalModePicker: View {
         }
         .pickerStyle(.segmented)
         .labelsHidden()
-        .accessibilityLabel("Layout")
+        // No explicit `.accessibilityLabel` here: `Picker("Layout", …)` already
+        // supplies one and `.labelsHidden()` is visual only, so adding a second
+        // is at best redundant — and at worst it flattens a container of
+        // accessibility elements into one, which would cost VoiceOver the
+        // ability to move between the two segments. `ModeBadge` is the opposite
+        // case and labels itself deliberately: it is a leaf, not a container.
         .help("Layout — how every item is laid out under the chosen folder. "
-              + "The TV and Movies headers, and each row, can override this.")
+              + "The TV and Movies headers override it for a media kind; "
+              + "right-click a row, or use View ▸ Layout, for one item.")
     }
 }

@@ -19,6 +19,13 @@ struct ContentView: View {
                     // menu, taking the layout picker with them. The split position
                     // persists across launches, so one careless drag hides the
                     // picker permanently until it is dragged back.
+                    //
+                    // `AppModel.statesOwnLayout` now depends on this: it
+                    // suppresses every row's layout mark on a plan where nothing
+                    // overrides, on the grounds that the toolbar already says it.
+                    // Losing the picker there would leave the active layout
+                    // stated nowhere at all, so this cap and the `minWidth`
+                    // below are what make that suppression safe.
                     .navigationSplitViewColumnWidth(min: 250, ideal: 300, max: 420)
             } detail: {
                 DetailView(model: model)
@@ -49,7 +56,7 @@ struct ContentView: View {
             // Acronym controls sit just above the apply bar, shown only when
             // there are all-caps words to decide. A bottom sibling avoids the
             // macOS 26 split-view safe-area bug that forced the old title-bar
-            // accessory (see AcronymTitlebar, now unused).
+            // accessory (`AcronymTitlebar`, deleted in ef2db05).
             if !model.acronymWords.isEmpty {
                 Divider()
                 AcronymBar(model: model)

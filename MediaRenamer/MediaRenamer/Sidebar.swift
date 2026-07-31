@@ -9,7 +9,8 @@ struct SidebarView: View {
             if let plan = model.plan {
                 let g = PlanGroups(plan)
 
-                AllItemsRow(count: g.tvRename.count + g.movieRename.count)
+                AllItemsRow(count: g.tvRename.count + g.movieRename.count,
+                            selected: model.selection == .all)
                     .tag(Selection.all)
 
                 // The section also renders when the group is EMPTY but carries an
@@ -32,7 +33,8 @@ struct SidebarView: View {
 
                             if show.isMultiSeason, model.isShowExpanded(show.source) {
                                 ForEach(show.seasonSlices) { slice in
-                                    SeasonRow(slice: slice, conflicts: plan.conflicts)
+                                    SeasonRow(slice: slice, show: show,
+                                              conflicts: plan.conflicts, model: model)
                                         .tag(Selection.season(show: show.source, number: slice.number))
                                 }
                             }
@@ -59,7 +61,7 @@ struct SidebarView: View {
                             // be undone in place — the same reason the group
                             // sections above survive an empty bucket.
                             if model.hasSelectableRow(node) {
-                                PinnedRow(node: node, model: model)
+                                PinnedRow(node: node, conflicts: plan.conflicts, model: model)
                                     .tag(Selection.item(node.source))
                             } else {
                                 MutedRow(name: node.originalName, detail: "already named")
@@ -93,6 +95,47 @@ struct SidebarView: View {
     }
 }
 
+/// A hover wash for every sidebar row that responds to a click.
+///
+/// The whole list used to sit dead under the pointer, which was survivable while
+/// each row carried a chip that lit up on its own. It is not survivable now that
+/// the layout setting has moved to a right-click: a list that never reacts reads
+/// as text, and text does not invite a right-click.
+///
+/// Applied to everything **selectable** — "All items" and the show/movie/season/
+/// pinned rows. Only `MutedRow` stays dark, because it is genuinely inert: not
+/// selectable, no menu, nothing to click. So the wash means "this row does
+/// something", which is the property that makes it worth drawing.
+///
+/// Suppressed while the row is selected: the selection highlight already owns
+/// the row, and stacking a wash on top of it only muddies the colour.
+///
+/// Drawn as a **row background**, not a background on the row's content. The
+/// content is inset from the row, so a wash on it lands narrower than the
+/// selection capsule and the two read as different shapes; `listRowBackground`
+/// is scoped to the same rect the selection uses.
+fileprivate struct RowHover: ViewModifier {
+    let isSelected: Bool
+    @State private var hovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .listRowBackground(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.primary.opacity(hovering && !isSelected ? 0.12 : 0))
+            )
+            .onHover { hovering = $0 }
+    }
+}
+
+extension View {
+    /// See `RowHover`. Apply **after** the row's `contentShape`, so the whole
+    /// row lights up rather than just the text.
+    fileprivate func rowHover(selected: Bool) -> some View {
+        modifier(RowHover(isSelected: selected))
+    }
+}
+
 /// A sidebar section header carrying the group-level layout override for one
 /// media kind. Three states: an untouched group defers to the global rather than
 /// pinning a mode, so setting the toolbar picker still moves everything.
@@ -115,7 +158,7 @@ struct GroupModeHeader: View {
 }
 
 /// A TV show row: a disclosure chevron (when the show spans multiple seasons),
-/// the show name, a season/file summary, and the show's layout control.
+/// the show name, a season/file summary, and the row's passive status marks.
 ///
 /// The name area is one button — a click selects the show (focusing every
 /// season's files under a single title edit) and, for a multi-season show,
@@ -123,10 +166,10 @@ struct GroupModeHeader: View {
 /// toggles back. (We drive selection in the button action instead of relying on
 /// the List's tap, which a custom row gesture suppresses.)
 ///
-/// The layout chip sits **outside** that button rather than inside it. A menu
-/// nested inside a row-wide button has to fight it for every click; giving the
-/// button everything to the left of the chip keeps the whole name area tappable
-/// and leaves the chip an uncontested hit area of its own.
+/// The trailing marks sit **outside** that button. That started as a necessity —
+/// a menu nested inside a row-wide button had to fight it for every click — and
+/// survives its cause: the marks are inert now, but pulling them inside would
+/// hand the button a click target that reports layout and does nothing about it.
 struct ShowRow: View {
     let node: NodePlan
     let conflicts: Set<URL>
@@ -159,17 +202,40 @@ struct ShowRow: View {
             }
             .buttonStyle(.plain)
 
-            ItemModeChip(node: node, model: model)
+            // Flags first, mark last. The mark is the one token that repeats
+            // across rows, so it is the one that needs a column — and the
+            // trailing-most view gets one for free, because the Spacer absorbs
+            // every point of slack. Outboard variable-width flags were what
+            // scattered it over nine x positions across a 111pt spread. The
+            // flags carry colour and a glyph, so they stay findable unaligned.
             FlagBadges(node: node, conflicts: conflicts, compact: true)
+            ItemModeMark(node: node, model: model)
         }
         .padding(.vertical, 2)
+        // Spacer is not hit-testable and this HStack has neither a background
+        // nor a shape of its own, so without this ~70% of the row is dead to
+        // right-click. A shape, not a gesture — it does not re-open the
+        // left-click contention described above.
+        .contentShape(Rectangle())
+        .rowHover(selected: model.selection == .item(node.source))
+        // Named, not a bare "Layout" — a right-click need not move the List's
+        // selection, so this menu and its View ▸ Layout mirror can point at
+        // different rows at once. See `ItemLayoutMenu.title`.
+        .contextMenu {
+            ItemLayoutMenu(node: node, model: model,
+                           title: "Layout — “\(node.displayTitle)”")
+        }
     }
 }
 
 /// An indented season row under a show. Selecting it focuses just that season.
 struct SeasonRow: View {
     let slice: SeasonSlice
+    /// The show this season belongs to — the level its layout is actually set
+    /// at, and what its context menu names.
+    let show: NodePlan
     let conflicts: Set<URL>
+    let model: AppModel
 
     private var conflicted: Bool { slice.sources.contains { conflicts.contains($0) } }
 
@@ -188,11 +254,23 @@ struct SeasonRow: View {
             }
         }
         .padding(.vertical, 1)
+        .contentShape(Rectangle())
+        .rowHover(selected: model.selection == .season(show: show.source,
+                                                       number: slice.number))
+        // No layout mark of its own — a season never carries a setting. But the
+        // menu targets the parent show and says whose layout it is changing,
+        // because a right-click that produced nothing here would teach the user
+        // that seasons have no layout rather than that shows own it.
+        .contextMenu {
+            ItemLayoutMenu(node: show, model: model,
+                           title: "Layout — “\(show.displayTitle)”")
+        }
     }
 }
 
 struct AllItemsRow: View {
     let count: Int
+    var selected = false
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "square.stack.3d.up").foregroundStyle(.secondary)
@@ -203,8 +281,11 @@ struct AllItemsRow: View {
             }
             Spacer()
             Text("\(count)").font(.caption).foregroundStyle(.secondary)
+                .monospacedDigit()
         }
         .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .rowHover(selected: selected)
     }
 }
 
@@ -228,25 +309,35 @@ struct SidebarRow: View {
                     .lineLimit(1).truncationMode(.middle)
             }
             Spacer(minLength: 4)
-            ItemModeChip(node: node, model: model)
             FlagBadges(node: node, conflicts: conflicts, compact: true)
+            ItemModeMark(node: node, model: model)
         }
         .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .rowHover(selected: model.selection == .item(node.source))
+        // Named, not a bare "Layout" — a right-click need not move the List's
+        // selection, so this menu and its View ▸ Layout mirror can point at
+        // different rows at once. See `ItemLayoutMenu.title`.
+        .contextMenu {
+            ItemLayoutMenu(node: node, model: model,
+                           title: "Layout — “\(node.displayTitle)”")
+        }
     }
 }
 
 /// An `.unchanged` row that a deliberate layout override is holding in place —
 /// forcing Folders onto an already-organised item leaves it nothing to do.
-/// Unlike its muted siblings it stays selectable and carries the layout control,
-/// so the override remains visible and reversible instead of quietly stranding
-/// the item.
+/// Unlike its muted siblings it stays selectable, so the override remains
+/// visible and reversible instead of quietly stranding the item.
 ///
-/// The control here is **load-bearing, not decorative**: this row is the only
-/// place a pinned override on a node with no work left can be cleared. When the
-/// item control lived in the inspector this row could get away with a static
-/// badge, because the inspector still offered a way out. It no longer does.
+/// This row is **load-bearing, not decorative**: it is the only place a pinned
+/// override on a node with no work left can be cleared. What satisfies that is
+/// reachability of the *setter*, not a widget in the row — the row is
+/// right-clickable and it is selectable, so `Layout ▸` and View ▸ Layout both
+/// reach it.
 struct PinnedRow: View {
     let node: NodePlan
+    let conflicts: Set<URL>
     let model: AppModel
 
     var body: some View {
@@ -260,9 +351,27 @@ struct PinnedRow: View {
                 Text("already named").font(.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 4)
-            ItemModeChip(node: node, model: model)
+            // `isConflicted(in:)` is unit-aware, not move-aware, so a pinned
+            // node sitting in a collision is flagged nowhere else in the app.
+            // Junk self-suppresses on an `.unchanged` node; verify is real here.
+            FlagBadges(node: node, conflicts: conflicts, compact: true)
+            // Deliberately NOT gated by `statesOwnLayout`. This row exists only
+            // when `hasSelectableRow` holds, which for an `.unchanged` node is
+            // *exactly* `itemOverride != .inherit` — the gate's first disjunct.
+            // The gate would be a tautology here; leaving it out means no future
+            // edit to the visibility rule can strand an override with no cue.
+            ModeBadge(mode: node.outputMode, explicit: true, showsWord: false)
         }
         .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .rowHover(selected: model.selection == .item(node.source))
+        // Named, not a bare "Layout" — a right-click need not move the List's
+        // selection, so this menu and its View ▸ Layout mirror can point at
+        // different rows at once. See `ItemLayoutMenu.title`.
+        .contextMenu {
+            ItemLayoutMenu(node: node, model: model,
+                           title: "Layout — “\(node.displayTitle)”")
+        }
     }
 }
 
@@ -294,6 +403,7 @@ struct FlagBadges: View {
             }
             if !node.junk.isEmpty {
                 badge("\(node.junk.count) junk", "trash", Palette.junk)
+                    .monospacedDigit()
             }
             if node.needsVerify {
                 badge(compact ? nil : "verify", "flag", Palette.verify)
@@ -305,7 +415,10 @@ struct FlagBadges: View {
     private func badge(_ text: String?, _ symbol: String, _ color: Color) -> some View {
         HStack(spacing: 3) {
             Image(systemName: symbol)
-            if let text { Text(text) }
+            // Without these the word wraps under compression: at the 250pt
+            // minimum column "dup" stacks into three letters and the row's
+            // height goes 34 → 82pt.
+            if let text { Text(text).lineLimit(1).fixedSize() }
         }
         .font(.caption2)
         .foregroundStyle(color)
