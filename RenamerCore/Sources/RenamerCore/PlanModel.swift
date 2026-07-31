@@ -66,8 +66,9 @@ public struct NodePlan: Equatable, Sendable, Identifiable {
     public var note: String
     /// The filesystem operations this node will perform when applied.
     public var operations: [Operation]
-    /// Detected junk inside the node (offered for deletion later).
-    public var junk: [URL]
+    /// Junk found inside the node by the scan, *before* the status gate.
+    /// Read `junk` instead — this is only its unfiltered input.
+    public var detectedJunk: [URL]
     /// Before→after pairs for display (relative to the input root).
     public var previewPairs: [PreviewPair]
     /// If set, the final title contains preserved stopwords worth verifying.
@@ -87,6 +88,25 @@ public struct NodePlan: Equatable, Sendable, Identifiable {
     /// rather than being handed three settings to re-resolve.
     public var outputMode: OutputMode
 
+    /// The junk this node offers for the Trash — counted in the summary chip,
+    /// badged on the row, listed with checkboxes in the inspector, and deleted
+    /// by `Executor`.
+    ///
+    /// **Gated on `status`, deliberately.** Junk is surfaced only for a node the
+    /// app is actually restructuring. A folder it skipped (no videos, mixed
+    /// content, nothing parsable), or one that already has the name it wants, is
+    /// out of contract: the app is not touching that folder, so it must not
+    /// delete anything inside it either. Without the gate a skipped folder's
+    /// contents were counted and trashed while being impossible to see or
+    /// uncheck — skipped rows are unselectable and list no junk at all.
+    ///
+    /// The rule lives on the model rather than in each consumer so that every
+    /// one of them inherits it and a new consumer cannot reopen the hole. The
+    /// raw scan result stays in `detectedJunk` because status is not final: a
+    /// layout or title edit can flip a node between `.unchanged` and `.rename`
+    /// (`PlanBuilder.recompute`), and its junk has to come back with it.
+    public var junk: [URL] { status == .rename ? detectedJunk : [] }
+
     public var id: URL { source }
 
     public init(
@@ -95,7 +115,7 @@ public struct NodePlan: Equatable, Sendable, Identifiable {
         status: PlanStatus,
         note: String = "",
         operations: [Operation] = [],
-        junk: [URL] = [],
+        detectedJunk: [URL] = [],
         previewPairs: [PreviewPair] = [],
         verifyTitle: String = "",
         verifyWords: [String] = [],
@@ -109,7 +129,7 @@ public struct NodePlan: Equatable, Sendable, Identifiable {
         self.status = status
         self.note = note
         self.operations = operations
-        self.junk = junk
+        self.detectedJunk = detectedJunk
         self.previewPairs = previewPairs
         self.verifyTitle = verifyTitle
         self.verifyWords = verifyWords

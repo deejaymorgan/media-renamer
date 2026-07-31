@@ -46,3 +46,5 @@ never calls it. Swift tests mirror the Python `tests/` as the parity contract.
 - Library folders (`movies/music/tv`) and hidden/metadata files (`.DS_Store`, `._*`) ignored.
 - New parsing/planning/execution code lands with parity tests mirrored from the
   Python oracle; the quality-tag/resolver suites are new (the CLI only skips conflicts).
+
+Past lessons & decisions: LEARNINGS.md — skim before starting significant work.

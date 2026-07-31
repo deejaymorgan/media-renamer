@@ -371,12 +371,22 @@ public enum PlanBuilder {
 
     // MARK: - Folders
 
+    /// Plan one subfolder of the root.
+    ///
+    /// **A skipped folder keeps its junk to itself.** The scan classifies every
+    /// non-video, non-subtitle file it walks past as junk, but a folder this
+    /// function declines to restructure is one the app does not understand and
+    /// will not touch — so its contents are not offered for deletion either.
+    /// The skip branches below deliberately pass no `detectedJunk`; only
+    /// `planFolder`, which is actually restructuring something, does.
+    /// `NodePlan.junk` gates the same rule on status a second time, for the
+    /// nodes that start out renaming and later turn out to have nothing to do.
     private static func planDirectory(_ folder: URL, root: URL,
                                       acronyms: [String: String]) -> NodePlan {
         let (videos, sidecars, junk) = Scanner.scanContents(folder)
         if videos.isEmpty {
             return NodePlan(source: folder, mediaType: .unknown, status: .skip,
-                            note: "folder has no .mkv files", junk: junk)
+                            note: "folder has no .mkv files")
         }
 
         let parses: [(URL, MediaParse?)] = videos.map { v in
@@ -395,13 +405,11 @@ public enum PlanBuilder {
         } else if unknownCount > 0 && tvCount == 0 && movieCount == 0 {
             let offender = parses.first { $0.1 == nil }?.0.lastPathComponent ?? ""
             return NodePlan(source: folder, mediaType: .unknown, status: .skip,
-                            note: "file has no episode code or release year: \(offender)",
-                            junk: junk)
+                            note: "file has no episode code or release year: \(offender)")
         } else {
             return NodePlan(source: folder, mediaType: .unknown, status: .skip,
                             note: "mixed TV/movie or unrecognised content "
-                                + "(tv=\(tvCount), movie=\(movieCount), unknown=\(unknownCount))",
-                            junk: junk)
+                                + "(tv=\(tvCount), movie=\(movieCount), unknown=\(unknownCount))")
         }
     }
 
@@ -443,7 +451,7 @@ public enum PlanBuilder {
         }
 
         var plan = NodePlan(source: folder, mediaType: isTV ? .tv : .movie,
-                            status: .rename, junk: junk,
+                            status: .rename, detectedJunk: junk,
                             editTitle: editTitle, editYear: editYear, units: units)
 
         let allPreserved = Set(parses.flatMap { $0.1.preservedStopwords }).sorted()
