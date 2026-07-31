@@ -132,7 +132,7 @@ struct InspectorView: View {
                 if node.isConflicted(in: conflicts) {
                     ConflictResolveSection(node: node, model: model)
                 } else {
-                    ResultingFiles(node: node, rootName: model.rootName)
+                    ResultingFiles(node: node, root: model.folderURL)
                     if !node.junk.isEmpty { JunkList(node: node, model: model) }
                 }
             }
@@ -191,7 +191,7 @@ struct SeasonInspectorView: View {
                     SeasonConflicts(node: node, slice: slice, model: model)
                 } else {
                     SeasonResultingFiles(slice: slice, mode: node.outputMode,
-                                         rootName: model.rootName)
+                                         root: model.folderURL)
                 }
             }
             .padding(20)
@@ -205,12 +205,12 @@ struct SeasonInspectorView: View {
 struct SeasonResultingFiles: View {
     let slice: SeasonSlice
     var mode: OutputMode = .organise
-    var rootName: String = ""
+    var root: URL?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Resulting files").font(.subheadline).foregroundStyle(.secondary)
-            FolderGroups(pairs: slice.pairs, mode: mode, rootName: rootName)
+            FolderGroups(pairs: slice.pairs, mode: mode, root: root)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -308,7 +308,7 @@ struct AllCard: View {
                 if node.isConflicted(in: conflicts) {
                     ConflictResolveSection(node: node, model: model)
                 } else {
-                    ResultingFiles(node: node, rootName: model.rootName)
+                    ResultingFiles(node: node, root: model.folderURL)
                     if !node.junk.isEmpty { JunkList(node: node, model: model) }
                 }
             } else {
@@ -371,8 +371,20 @@ private func groupedByFolder(_ pairs: [PreviewPair]) -> [(folder: String, pairs:
 /// It used to carry a muted "flattened" tag as well. That was a third vocabulary
 /// for a distinction the glyph and tint already draw, and the word appeared
 /// nowhere else in the app.
+/// **Every band starts at the chosen folder.** Organised groups read
+/// `downloads › Silo › Season 3`, flat groups read `downloads` — the two shapes
+/// are structurally parallel, and both answer "which folder?", which is the
+/// question that was actually going unanswered: organised bands used to name
+/// the show and the season but never the root they hung off, so with the same
+/// file present in two folders on disk the preview couldn't say which one it
+/// had scanned. The leading crumb is context rather than content, so it is
+/// de-emphasised — unless it is the whole answer, which is the flat case.
 private struct FolderBand: View {
-    let crumb: String
+    /// Path components from the chosen folder down, the chosen folder first.
+    let crumbs: [String]
+    /// The folder those crumbs name. Usually does not exist yet — the tree is
+    /// built at Apply — but the path is real either way.
+    let url: URL?
     var mode: OutputMode = .organise
 
     var body: some View {
@@ -385,15 +397,54 @@ private struct FolderBand: View {
         .padding(.horizontal, 10).padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
-        .help(mode == .renameOnly
-              ? "Flat — these files land directly in “\(crumb)”, with no folder tree."
-              : "These files land in “\(crumb)”.")
+        .help(helpText)
+        .contextMenu {
+            if let url {
+                Button("Reveal in Finder") {
+                    if let target = revealTarget {
+                        NSWorkspace.shared.activateFileViewerSelecting([target])
+                    }
+                }
+                .disabled(revealTarget == nil)
+                Button("Copy Path") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(url.path, forType: .string)
+                }
+            }
+        }
+    }
+
+    /// The full destination path — the band names a folder, the tooltip says
+    /// exactly which one.
+    private var helpText: String {
+        let path = url?.path ?? crumbs.joined(separator: "/")
+        return mode == .renameOnly
+            ? "Flat — these files land directly in \(path), with no folder tree."
+            : "These files land in \(path)."
+    }
+
+    /// The deepest part of the destination that exists right now. An organised
+    /// group's folder is usually not built until Apply, so revealing it verbatim
+    /// would silently do nothing; walking up lands the user in the chosen folder
+    /// instead, which is the useful answer.
+    private var revealTarget: URL? {
+        guard var target = url else { return nil }
+        while !FileManager.default.fileExists(atPath: target.path) {
+            let parent = target.deletingLastPathComponent()
+            guard parent.path != target.path else { return nil }
+            target = parent
+        }
+        return target
     }
 
     private var crumbText: Text {
-        crumb.components(separatedBy: " › ").enumerated().reduce(Text("")) { acc, part in
+        crumbs.enumerated().reduce(Text("")) { acc, part in
             let sep = part.offset == 0 ? Text("") : Text(" › ").foregroundStyle(.tertiary)
-            return acc + sep + Text(part.element).foregroundStyle(.primary)
+            let leadingRoot = part.offset == 0 && crumbs.count > 1
+            let crumb = leadingRoot
+                ? Text(part.element).foregroundStyle(.secondary)
+                : Text(part.element).foregroundStyle(.primary)
+            return acc + sep + crumb
         }
     }
 }
@@ -429,22 +480,24 @@ struct PairRow: View {
 /// One destination folder: its breadcrumb band over the two-column table of the
 /// files that land in it.
 private struct FolderGroup: View {
+    /// Destination folder relative to the root, as " › "-joined crumbs. Empty
+    /// when the files land in the root itself — which is the flat case, and no
+    /// longer needs a branch of its own: a flat band is the one-crumb form of
+    /// the same band, not a different band.
     let folder: String
     let pairs: [PreviewPair]
     var mode: OutputMode = .organise
-    var rootName: String = ""
+    var root: URL?
+
+    private var subfolders: [String] {
+        folder.isEmpty ? [] : folder.components(separatedBy: " › ")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            if !folder.isEmpty {
-                FolderBand(crumb: folder)
-            } else if mode == .renameOnly {
-                // No folder crumb *because* the files land at the root — name the
-                // chosen folder rather than showing a bare list, which would be
-                // indistinguishable from an organised group.
-                FolderBand(crumb: rootName.isEmpty ? "the chosen folder" : rootName,
-                           mode: .renameOnly)
-            }
+            FolderBand(crumbs: [root?.lastPathComponent ?? "the chosen folder"] + subfolders,
+                       url: subfolders.reduce(root) { $0?.appendingPathComponent($1) },
+                       mode: mode)
             // Indent the files under their folder band, with a guide rail, so
             // each list reads as nested inside its destination folder.
             HStack(alignment: .top, spacing: 14) {
@@ -466,34 +519,34 @@ private struct FolderGroup: View {
 struct FolderGroups: View {
     let pairs: [PreviewPair]
     var mode: OutputMode = .organise
-    var rootName: String = ""
+    var root: URL?
 
     var body: some View {
         ForEach(Array(groupedByFolder(pairs).enumerated()), id: \.offset) { _, group in
             FolderGroup(folder: group.folder, pairs: group.pairs,
-                        mode: mode, rootName: rootName)
+                        mode: mode, root: root)
         }
     }
 }
 
 struct ResultingFiles: View {
     let node: NodePlan
-    var rootName: String = ""
+    var root: URL?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Resulting files").font(.subheadline).foregroundStyle(.secondary)
             // Organised TV iterates seasons in ascending order (each becomes its
-            // own band); movies fall through to a single group. A flattened show
-            // takes that same single-group path on purpose: every season lands in
-            // the one folder, so per-season bands would repeat one destination.
+            // own band); movies fall through to a single group. A flat show takes
+            // that same single-group path on purpose: every season lands in the
+            // one folder, so per-season bands would repeat one destination.
             if node.outputMode == .organise, node.mediaType == .tv, !node.seasonSlices.isEmpty {
                 ForEach(node.seasonSlices) { slice in
-                    FolderGroups(pairs: slice.pairs)
+                    FolderGroups(pairs: slice.pairs, root: root)
                 }
             } else {
                 FolderGroups(pairs: node.previewPairs,
-                             mode: node.outputMode, rootName: rootName)
+                             mode: node.outputMode, root: root)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
