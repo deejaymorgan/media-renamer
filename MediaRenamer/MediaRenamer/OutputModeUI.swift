@@ -188,13 +188,17 @@ struct ModeBadge: View {
 /// render **one** control rather than three copies to keep in step. `.inline`
 /// draws correctly in all three on macOS 14.
 struct LayoutPicker: View {
+    /// The picker's own label. An `.inline` picker draws it as the section
+    /// heading above the choices, which is how a row's context menu names the
+    /// row it is about to change without spending a submenu on it.
+    var title = "Layout"
     let current: ModeOverride
     /// The mode `.inherit` resolves to for this group/item right now.
     let inherited: OutputMode
     let set: (ModeOverride) -> Void
 
     var body: some View {
-        Picker("Layout", selection: Binding(get: { current }, set: set)) {
+        Picker(title, selection: Binding(get: { current }, set: set)) {
             Text("Inherit — \(inherited.name)").tag(ModeOverride.inherit)
             Text(OutputMode.organise.name).tag(ModeOverride.organise)
             Text(OutputMode.renameOnly.name).tag(ModeOverride.renameOnly)
@@ -291,37 +295,44 @@ struct ItemModeMark: View {
     }
 }
 
-/// The row-level layout **control**, in its new home: a `Layout ▸` submenu in
-/// the row's context menu, mirrored by View ▸ Layout on the selection.
+/// The row-level layout **control**, in its new home: the row's context menu,
+/// mirrored by View ▸ Layout on the selection.
 ///
 /// Right-click is a legitimate primary home on macOS precisely because the HIG
 /// requires the mirror — *"always make context menu items available in the main
 /// interface, too"* — so the pair is more idiomatic than a control on every row,
 /// not less. It is also what Mail does with mailbox behaviours and Finder with
 /// tags: the row shows state, the menus set it.
+///
+/// **Flat, not a `Layout ▸` submenu.** Layout is the only thing a sidebar row's
+/// context menu offers, and nesting one item under one heading spends a click
+/// and a hover-open on a branch that never forks. The `.inline` picker draws
+/// `title` as its section heading instead, so the menu still says whose layout
+/// it is about to change while putting the three choices one click from the
+/// right-click. If a row ever gains a second unrelated command, this becomes a
+/// `Menu` again and the heading becomes its title — but not before.
 struct ItemLayoutMenu: View {
     let node: NodePlan
     let model: AppModel
-    /// What the submenu is called. **Required, with no default** — every caller
-    /// must say what it is about to change. Season rows have to, because layout
-    /// is show-scoped (one override per show, never per season) and a bare
-    /// "Layout" there would misstate what it reaches. Item rows have to for a
-    /// subtler reason: a right-click does not necessarily move `List` selection,
-    /// so this menu and its View ▸ Layout mirror can be pointed at different
-    /// nodes at the same instant, and only one of them saying so is how a user
-    /// changes the mode on a row they were not looking at. Naming the target also
-    /// puts the axis word "Layout" one right-click away on every row, which is
-    /// where it earns its keep now that no surface draws it at rest.
+    /// What the menu says it will change. **Required, with no default** — every
+    /// caller must name its target. Season rows have to, because layout is
+    /// show-scoped (one override per show, never per season) and a bare "Layout"
+    /// there would misstate what it reaches. Item rows have to for a subtler
+    /// reason: a right-click does not necessarily move `List` selection, so this
+    /// menu and its View ▸ Layout mirror can be pointed at different nodes at the
+    /// same instant, and only one of them saying so is how a user changes the
+    /// mode on a row they were not looking at. Naming the target also puts the
+    /// axis word "Layout" one right-click away on every row, which is where it
+    /// earns its keep now that no surface draws it at rest.
     let title: String
 
     var body: some View {
-        Menu(title) {
-            LayoutPicker(
-                current: model.itemOverride(for: node.source),
-                inherited: model.inheritedMode(for: node),
-                set: { model.setItemOverride($0, for: node.source) }
-            )
-        }
+        LayoutPicker(
+            title: title,
+            current: model.itemOverride(for: node.source),
+            inherited: model.inheritedMode(for: node),
+            set: { model.setItemOverride($0, for: node.source) }
+        )
     }
 }
 

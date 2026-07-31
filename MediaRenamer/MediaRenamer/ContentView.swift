@@ -2,11 +2,25 @@ import SwiftUI
 import UniformTypeIdentifiers
 import RenamerCore
 
+/// The window's content width, reported up from a `.background` reader so the
+/// sidebar's maximum can be half of it. A preference rather than a shared
+/// `GeometryReader` wrapper: the wrapper would sit between the window and the
+/// split view and change what is being measured.
+private struct WindowWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 struct ContentView: View {
     @State private var model = AppModel()
     @State private var importing = false
     @State private var confirming = false
     @State private var showResult = false
+    /// See `WindowWidthKey`. Seeded at the window's own floor so the first
+    /// layout pass caps the column sensibly rather than at the 420 fallback.
+    @State private var windowWidth: CGFloat = 1160
 
     var body: some View {
         VStack(spacing: 0) {
@@ -26,7 +40,18 @@ struct ContentView: View {
                     // Losing the picker there would leave the active layout
                     // stated nowhere at all, so this cap and the `minWidth`
                     // below are what make that suppression safe.
-                    .navigationSplitViewColumnWidth(min: 250, ideal: 300, max: 420)
+                    //
+                    // Half the window rather than a fixed 420, so the column
+                    // grows with the space available instead of freezing at a
+                    // number chosen for the smallest allowed window. Half is
+                    // also what makes the bound self-maintaining: the toolbar
+                    // needs `sidebar + 510`, so a sidebar of `W/2` is safe for
+                    // every `W ≥ 1020` — no per-width arithmetic, and no way for
+                    // a wider window to reintroduce the overflow. `minWidth`
+                    // below carries the headroom on top of that. The 420 floor
+                    // only matters before the first geometry reading lands.
+                    .navigationSplitViewColumnWidth(
+                        min: 250, ideal: 300, max: max(420, windowWidth / 2))
             } detail: {
                 DetailView(model: model)
             }
@@ -64,13 +89,29 @@ struct ContentView: View {
             Divider()
             BottomBar(model: model) { confirming = true }
         }
-        // 1040, not 960: measured, the toolbar needs roughly `sidebar + 510` to
-        // lay both trailing items out, so the 420 cap above puts the real floor
-        // at ~930. The extra is headroom for the toolbar's own content — swapping
-        // the picker's labels back to `Organise / Rename only` alone costs 68pt
-        // of intrinsic width, which at 960 would have reintroduced the overflow
-        // invisibly.
-        .frame(minWidth: 1040, minHeight: 640)
+        // Measured, the toolbar needs roughly `sidebar + 510` to lay both
+        // trailing items out. With the half-the-window cap above, `sidebar` is at
+        // most `W/2`, so the binding constraint is `W/2 + 510 ≤ W` — i.e. 1020.
+        // 1160 is that plus headroom for the toolbar's own content: swapping the
+        // picker's labels back to `Organise / Rename only` costs 68pt of
+        // intrinsic width, which makes the requirement `W/2 + 578 ≤ W`, i.e.
+        // 1156. At 1020 that change would have reintroduced the overflow
+        // invisibly — the same landmine 39a37bd removed when it deleted the
+        // hardcoded `.frame(width: 140)`.
+        .frame(minWidth: 1160, minHeight: 640)
+        // Reads the window's content width for the column cap above. A
+        // `GeometryReader` in a `.background` measures without proposing, so it
+        // cannot disturb the split view's own layout — the same technique the
+        // toolbar probes in `notes/` use, and deliberately not a wrapper around
+        // `NavigationSplitView`, which changed the layout under test when
+        // e050b09 was being measured.
+        .background {
+            GeometryReader { geo in
+                Color.clear.preference(key: WindowWidthKey.self,
+                                       value: geo.size.width)
+            }
+        }
+        .onPreferenceChange(WindowWidthKey.self) { windowWidth = $0 }
         .focusedSceneValue(\.appModel, model)
         .fileImporter(
             isPresented: $importing,

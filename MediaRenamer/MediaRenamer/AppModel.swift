@@ -215,10 +215,11 @@ final class AppModel {
     ///
     /// **That reference is an invariant, not a given.** This rule is only safe
     /// while the toolbar picker is guaranteed to be on screen, and what
-    /// guarantees it is the sidebar column cap (`max: 420`) and the window floor
-    /// (`minWidth: 1040`) in `ContentView.body` — measured, both trailing
-    /// toolbar items need roughly `sidebar + 510` points of window, so the cap
-    /// puts the true floor at ~930. Raise the cap or drop the floor and the
+    /// guarantees it is the sidebar column cap (half the window width) and the
+    /// window floor (`minWidth: 1160`) in `ContentView.body` — measured, both
+    /// trailing toolbar items need roughly `sidebar + 510` points of window, so
+    /// capping the column at `W/2` is safe for every `W ≥ 1020` and the floor
+    /// carries the headroom. Loosen the cap or drop the floor and the
     /// picker collapses into a `»` overflow menu; on an un-overridden plan the
     /// active layout would then be stated **nowhere** in the main window, since
     /// this method is suppressing every row mark on the strength of it. Those

@@ -238,17 +238,19 @@ Verbatim behaviour from the earlier Python engine, pinned by parity tests:
     silence on the toolbar's permanence: if the picker ever stopped being on
     screen, a plan with no overrides would state its layout *nowhere*. Two
     numbers in `ContentView` are what guarantee it, and they are load-bearing for
-    layout visibility rather than cosmetic tuning. The sidebar column's
-    `max: 420` caps a split position that otherwise persists across launches, so
-    the detail region can never be dragged narrow enough for the trailing
-    `.primaryAction` items — the picker among them — to collapse into a `»`
-    overflow menu. The window's `minWidth: 1040` then keeps the window itself
-    above that floor: measured, both trailing items need roughly `sidebar + 510`
-    points, so with the 420 cap the true floor is ~930 and the remainder is
-    headroom for the toolbar's own content (restoring the longer
-    `Organise / Rename only` labels alone costs 68pt of intrinsic width, which at
-    960 would have reintroduced the overflow invisibly). Lower either number and
-    the marks stop being an exception system.
+    layout visibility rather than cosmetic tuning. The sidebar column is capped
+    at **half the window width**, which caps a split position that otherwise
+    persists across launches, so the detail region can never be dragged narrow
+    enough for the trailing `.primaryAction` items — the picker among them — to
+    collapse into a `»` overflow menu. Half is what makes the bound
+    self-maintaining rather than a number that has to be re-tuned: measured, both
+    trailing items need roughly `sidebar + 510` points, so a sidebar of `W/2` is
+    safe for every `W ≥ 1020`, at any window size and with no per-width
+    arithmetic. The window's `minWidth: 1160` then holds the window above that
+    floor with headroom for the toolbar's own content — restoring the longer
+    `Organise / Rename only` labels costs 68pt of intrinsic width, making the
+    requirement `W ≥ 1156`, which at 1020 would have reintroduced the overflow
+    invisibly. Loosen either bound and the marks stop being an exception system.
   - The three levels: toolbar for the whole plan,
     section header for a media kind, and — for one item — the **row's context
     menu**, mirrored as **View ▸ Layout** on the selection (a season row's menu

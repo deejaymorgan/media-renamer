@@ -124,14 +124,6 @@ struct InspectorView: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     EditFields(node: node, model: model).id(node.source)
-                    // The one *persistent* statement of where the item rung
-                    // lives. The row's hover wash invites the right-click, but a
-                    // wash only exists under the pointer — it cannot tell
-                    // somebody who has not already guessed. Worded as the season
-                    // inspector words it, so the two agree.
-                    Text("To set this item’s layout, right-click its row in the "
-                         + "sidebar, or use View ▸ Layout.")
-                        .font(.caption2).foregroundStyle(.secondary)
                     TitleVerifyNote(node: node)
                 }
                 .padding(12)
