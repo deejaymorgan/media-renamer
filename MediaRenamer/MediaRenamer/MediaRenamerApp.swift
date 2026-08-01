@@ -47,8 +47,38 @@ struct LayoutCommands: Commands {
     var body: some Commands {
         CommandGroup(after: .sidebar) {
             layoutMenu
+            groupMenus
             Button("Reset All Layout Overrides") { model?.resetAllOverrides() }
                 .disabled((model?.overrideCount ?? 0) == 0)
+        }
+    }
+
+    /// The group rung's menu-bar home, one menu per media kind. The header
+    /// chips remain the in-context setters; these are their required mirrors —
+    /// added 2026-08-01, when it was noticed the rung had none, which
+    /// contradicted the mirror rule the item rung above is explicitly built
+    /// on. Disabled — but present — before a folder is chosen, for the same
+    /// reason `layoutMenu` is: discoverable before applicable.
+    @ViewBuilder
+    private var groupMenus: some View {
+        if let model, model.plan != nil {
+            Menu("Layout — TV") {
+                LayoutPicker(
+                    current: model.groupOverride(for: .tv),
+                    inherited: model.globalMode,
+                    set: { model.setGroupOverride($0, for: .tv) }
+                )
+            }
+            Menu("Layout — Movies") {
+                LayoutPicker(
+                    current: model.groupOverride(for: .movie),
+                    inherited: model.globalMode,
+                    set: { model.setGroupOverride($0, for: .movie) }
+                )
+            }
+        } else {
+            Button("Layout — TV") { }.disabled(true)
+            Button("Layout — Movies") { }.disabled(true)
         }
     }
 

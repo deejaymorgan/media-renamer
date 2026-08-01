@@ -79,13 +79,23 @@ extension ModeOverride {
 // MARK: - The chip
 
 /// The face every layout chip wears, interactive or not: the mode's glyph and
-/// word in the mode's tint, inside a capsule.
+/// word — dressed in the mode's tint and a capsule when, and only when, this
+/// level pins its own mode.
 ///
-/// **Pinned and inherited are different states, not different weights.** A
-/// pinned chip is bordered and filled; an inherited one is a soft wash with no
-/// border. The previous cue — semibold text over an 0.18-vs-0.10 background —
-/// was invisible in practice, which is how a plan could carry overrides nobody
-/// could see. Weight still rides along, but the border is what carries it.
+/// **Tint means one thing: an override in effect (2026-08-01, Daniel's call on
+/// sourced research).** A pinned face wears the mode's tint, a filled capsule
+/// and a border; an inherited face is bare monochrome `.secondary` text — no
+/// tint, no fill, no border — that brightens under the pointer. The previous
+/// dress tinted both states and let 0.22-vs-0.10 fill carry the difference,
+/// which is how two tinted capsules could sit in the sidebar at rest repeating
+/// what the toolbar already said — the pattern the HIG's colour guidance names
+/// ("Refrain from adding color to the background of multiple controls";
+/// reserve colour "for elements that truly benefit from emphasis, such as
+/// status indicators") and WWDC25's Liquid Glass sessions echo ("Avoid tinting
+/// all your elements"; the resting state should "stay visually quiet").
+/// Weight still rides along (semibold when pinned), but colour is the carrier.
+/// The word stays in the quiet face wherever `showsWord` asks for it: the
+/// header chip is the standing legend for the glyph-only row marks below it.
 private struct ModeChipFace: View {
     let mode: OutputMode
     /// Set deliberately at this level, rather than inherited from above.
@@ -120,16 +130,23 @@ private struct ModeChipFace: View {
         }
         .font(.caption2)
         .fontWeight(pinned ? .semibold : .regular)
-        .foregroundStyle(mode.tint)
+        .foregroundStyle(pinned ? AnyShapeStyle(mode.tint)
+                                : AnyShapeStyle(hovering ? .primary : .secondary))
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
         .background {
-            Capsule()
-                .fill(mode.tint.opacity(fill))
-                .overlay(
-                    Capsule().strokeBorder(mode.tint.opacity(pinned ? 0.85 : 0),
-                                           lineWidth: 1)
-                )
+            if pinned {
+                Capsule()
+                    .fill(mode.tint.opacity(hovering ? 0.30 : 0.22))
+                    .overlay(
+                        Capsule().strokeBorder(mode.tint.opacity(0.85),
+                                               lineWidth: 1)
+                    )
+            } else if hovering {
+                // The quiet face still has to come to life under the pointer —
+                // neutrally, so tint keeps its one meaning.
+                Capsule().fill(Color.primary.opacity(0.08))
+            }
         }
         // The face holds its intrinsic size rather than accepting a squeeze.
         // Measured: under a narrow proposal it otherwise wraps and deforms
@@ -141,11 +158,6 @@ private struct ModeChipFace: View {
         // `ModeChip` in particular: there the drawn face *is* the hit target,
         // so a container-driven distortion of the face distorts the target.
         .fixedSize()
-    }
-
-    private var fill: Double {
-        if pinned { return hovering ? 0.30 : 0.22 }
-        return hovering ? 0.20 : 0.10
     }
 }
 

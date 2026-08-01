@@ -154,6 +154,14 @@ extension View {
 /// A sidebar section header carrying the group-level layout override for one
 /// media kind. Three states: an untouched group defers to the global rather than
 /// pinning a mode, so setting the toolbar picker still moves everything.
+///
+/// The chip stays the in-context setter (2026-08-01, Daniel's call on sourced
+/// research): it is the group rung's one reliable mouse-reachable control, and
+/// the quiet inherited dress (see `ModeChipFace`) is what answers the
+/// too-much-at-rest complaint — not removal. Two mirrors back it up: the
+/// header's own context menu below, matching the rows' right-click grammar,
+/// and Layout — TV / Layout — Movies in the View menu (`LayoutCommands`), the
+/// HIG's required menu-bar home.
 struct GroupModeHeader: View {
     let title: String
     let type: MediaType
@@ -164,6 +172,29 @@ struct GroupModeHeader: View {
             Text(title)
             Spacer(minLength: 6)
             ModeChip(
+                current: model.groupOverride(for: type),
+                inherited: model.globalMode,
+                set: { model.setGroupOverride($0, for: type) }
+            )
+        }
+        // A section header gets shallower List insets than the rows under it,
+        // so unpadded the chip's trailing edge overshoots the rows' content
+        // edge and the right-hand rhythm breaks at every header. Measured with
+        // GeometryReader probes on a running window (2026-08-01): header
+        // content ends at maxX 515.5, row content at 501.5 — 14pt exactly,
+        // for both headers. A system metric, not a published one; re-measure
+        // if a future macOS moves either inset (see `RowHover` for the same
+        // caveat about the selection capsule).
+        .padding(.trailing, 14)
+        // Same reason as the rows: the Spacer is not hit-testable, so without
+        // a shape the header's middle is dead to right-click.
+        .contentShape(Rectangle())
+        // Named like the row menus — see `ItemLayoutPicker.title` for why every
+        // menu names its target. Verified firing on a macOS Section header on a
+        // running window (2026-08-01) — it was an open question in the research.
+        .contextMenu {
+            LayoutPicker(
+                title: "Layout — \(title)",
                 current: model.groupOverride(for: type),
                 inherited: model.globalMode,
                 set: { model.setGroupOverride($0, for: type) }
