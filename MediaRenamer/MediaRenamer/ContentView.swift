@@ -282,16 +282,31 @@ struct OverridesIndicator: View {
 
 // MARK: - Summary chips (bottom bar, leading)
 
-/// The per-category plan breakdown, rendered as colour-coded chips at the
-/// leading edge of the bottom bar (Apply and the status note sit trailing). Only
-/// non-empty categories show, so the row stays tight on small folders.
+/// The plan's shape, then its composition: two layout chips (how many items
+/// land Folders-style vs Flat), then the per-category breakdown, rendered as
+/// colour-coded chips at the leading edge of the bottom bar (Apply and the
+/// status note sit trailing). Only non-empty categories show, so the row stays
+/// tight on small folders — a uniform plan therefore shows one layout chip.
+/// All of them are status, not controls; none is clickable.
 struct SummaryChips: View {
     let model: AppModel
 
     var body: some View {
         if let plan = model.plan {
             let g = PlanGroups(plan)
+            // Item counts, like the TV/Movies chips beside them — not
+            // `fileCountsByMode`, which counts files and is the apply
+            // dialog's source.
+            let renaming = plan.nodes.filter { $0.status == .rename }
             HStack(spacing: 8) {
+                chip(OutputMode.organise.name,
+                     renaming.filter { $0.outputMode == .organise }.count,
+                     Palette.folders, symbol: OutputMode.organise.symbol)
+                    .help(layoutHelp(.organise))
+                chip(OutputMode.renameOnly.name,
+                     renaming.filter { $0.outputMode == .renameOnly }.count,
+                     Palette.flat, symbol: OutputMode.renameOnly.symbol)
+                    .help(layoutHelp(.renameOnly))
                 chip("TV", g.tvRename.count, Palette.tv)
                 chip("Movies", g.movieRename.count, Palette.movie)
                 chip("Unchanged", g.unchanged.count, nil)
@@ -302,12 +317,26 @@ struct SummaryChips: View {
         }
     }
 
+    /// `OutputMode.detail` is a clause built to follow a count, not a full
+    /// sentence — compose around it so both modes get the same sentence shape.
+    private func layoutHelp(_ mode: OutputMode) -> String {
+        "\(mode.name) — files land \(mode.detail)."
+    }
+
     /// One chip. `tint == nil` is a neutral (muted) category; a non-nil tint
     /// colours both the count and a faint capsule wash. Hidden when count is 0.
+    /// A non-nil `symbol` leads the count with the category's glyph — the two
+    /// layout chips carry glyph + word + tint together, single-sourced from
+    /// `OutputMode`, so the vocabulary can never drift from the controls'.
     @ViewBuilder
-    private func chip(_ label: String, _ count: Int, _ tint: Color?) -> some View {
+    private func chip(_ label: String, _ count: Int, _ tint: Color?,
+                      symbol: String? = nil) -> some View {
         if count > 0 {
             HStack(spacing: 4) {
+                if let symbol {
+                    Image(systemName: symbol)
+                        .foregroundStyle(tint ?? .secondary)
+                }
                 Text("\(count)")
                     .bold()
                     .monospacedDigit()
