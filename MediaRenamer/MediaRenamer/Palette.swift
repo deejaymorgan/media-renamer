@@ -30,8 +30,8 @@ enum Palette {
     // neither carries an alarm reading, so differentiating them no longer
     // implies that asymmetry — while sharing one tint left the two layouts
     // genuinely hard to tell apart at a glance, which is what prompted the
-    // reversal. Colour is still never the only signal: the glyph and the word
-    // carry it too.
+    // reversal. Colour is still never the only signal: the glyph, and the word
+    // wherever it is drawn, carry it too.
     //
     // Blue doing double duty with the TV chip is accepted: different context,
     // different shape.

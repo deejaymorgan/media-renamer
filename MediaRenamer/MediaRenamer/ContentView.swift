@@ -2,17 +2,56 @@ import SwiftUI
 import UniformTypeIdentifiers
 import RenamerCore
 
+/// The window's content width, reported up from a `.background` reader so the
+/// sidebar's maximum can be half of it. A preference rather than a shared
+/// `GeometryReader` wrapper: the wrapper would sit between the window and the
+/// split view and change what is being measured.
+private struct WindowWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 struct ContentView: View {
     @State private var model = AppModel()
     @State private var importing = false
     @State private var confirming = false
     @State private var showResult = false
+    /// See `WindowWidthKey`. Seeded at the window's own floor so the first
+    /// layout pass caps the column sensibly rather than at the 420 fallback.
+    @State private var windowWidth: CGFloat = 1160
 
     var body: some View {
         VStack(spacing: 0) {
             NavigationSplitView {
                 SidebarView(model: model)
-                    .navigationSplitViewColumnWidth(min: 250, ideal: 300)
+                    // The `max` is load-bearing, not taste. Without it the column
+                    // has no upper bound, so it can be dragged until the detail
+                    // region is too narrow to lay the toolbar out — and the
+                    // trailing `.primaryAction` items collapse into a `»` overflow
+                    // menu, taking the layout picker with them. The split position
+                    // persists across launches, so one careless drag hides the
+                    // picker permanently until it is dragged back.
+                    //
+                    // `AppModel.statesOwnLayout` now depends on this: it
+                    // suppresses every row's layout mark on a plan where nothing
+                    // overrides, on the grounds that the toolbar already says it.
+                    // Losing the picker there would leave the active layout
+                    // stated nowhere at all, so this cap and the `minWidth`
+                    // below are what make that suppression safe.
+                    //
+                    // Half the window rather than a fixed 420, so the column
+                    // grows with the space available instead of freezing at a
+                    // number chosen for the smallest allowed window. Half is
+                    // also what makes the bound self-maintaining: the toolbar
+                    // needs `sidebar + 510`, so a sidebar of `W/2` is safe for
+                    // every `W ≥ 1020` — no per-width arithmetic, and no way for
+                    // a wider window to reintroduce the overflow. `minWidth`
+                    // below carries the headroom on top of that. The 420 floor
+                    // only matters before the first geometry reading lands.
+                    .navigationSplitViewColumnWidth(
+                        min: 250, ideal: 300, max: max(420, windowWidth / 2))
             } detail: {
                 DetailView(model: model)
             }
@@ -42,7 +81,7 @@ struct ContentView: View {
             // Acronym controls sit just above the apply bar, shown only when
             // there are all-caps words to decide. A bottom sibling avoids the
             // macOS 26 split-view safe-area bug that forced the old title-bar
-            // accessory (see AcronymTitlebar, now unused).
+            // accessory (`AcronymTitlebar`, deleted in ef2db05).
             if !model.acronymWords.isEmpty {
                 Divider()
                 AcronymBar(model: model)
@@ -50,7 +89,29 @@ struct ContentView: View {
             Divider()
             BottomBar(model: model) { confirming = true }
         }
-        .frame(minWidth: 960, minHeight: 640)
+        // Measured, the toolbar needs roughly `sidebar + 510` to lay both
+        // trailing items out. With the half-the-window cap above, `sidebar` is at
+        // most `W/2`, so the binding constraint is `W/2 + 510 ≤ W` — i.e. 1020.
+        // 1160 is that plus headroom for the toolbar's own content: swapping the
+        // picker's labels back to `Organise / Rename only` costs 68pt of
+        // intrinsic width, which makes the requirement `W/2 + 578 ≤ W`, i.e.
+        // 1156. At 1020 that change would have reintroduced the overflow
+        // invisibly — the same landmine 39a37bd removed when it deleted the
+        // hardcoded `.frame(width: 140)`.
+        .frame(minWidth: 1160, minHeight: 640)
+        // Reads the window's content width for the column cap above. A
+        // `GeometryReader` in a `.background` measures without proposing, so it
+        // cannot disturb the split view's own layout — the same technique the
+        // toolbar probes in `notes/` use, and deliberately not a wrapper around
+        // `NavigationSplitView`, which changed the layout under test when
+        // e050b09 was being measured.
+        .background {
+            GeometryReader { geo in
+                Color.clear.preference(key: WindowWidthKey.self,
+                                       value: geo.size.width)
+            }
+        }
+        .onPreferenceChange(WindowWidthKey.self) { windowWidth = $0 }
         .focusedSceneValue(\.appModel, model)
         .fileImporter(
             isPresented: $importing,
@@ -177,17 +238,40 @@ struct OverridesIndicator: View {
 
     var body: some View {
         if model.overrideCount > 0 {
-            HStack(spacing: 4) {
+            // `spacing: 0`, deliberately. The button keeps toolbar control
+            // metrics (see below), which means it already carries the system's
+            // own horizontal padding around its glyph. Any `spacing` here lands
+            // *on top of* that padding, and only on the count's trailing side —
+            // so the old 6 made the gap inside the capsule wider than the
+            // capsule's own end insets, and the pair read as two things placed
+            // near each other rather than one item. Letting the button's padding
+            // be the whole separation is also the value that cannot go stale:
+            // it is the system's, not a number matched to today's metrics.
+            HStack(spacing: 0) {
                 Text(count(model.overrideCount, "override"))
-                    .font(.caption)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
+                    // Balances the button's own trailing padding at the other
+                    // end. Measured by tinting both children and reading their
+                    // frames off a running window: the item's glass container
+                    // insets its contents by ~7pt, and the button's frame is
+                    // ~7pt wider than its glyph on each side. Those stack only
+                    // on the trailing edge, so without this the interior runs
+                    // 7 / 7 / 14 — the arrow sitting with twice the room the
+                    // count gets — and the item reads as leaning left. With it,
+                    // 14 / 7 / 14: symmetric ends, and a gap tighter than both,
+                    // which is what makes the count and the arrow read as one
+                    // item rather than two.
+                    .padding(.leading, 7)
                 Button {
                     model.resetAllOverrides()
                 } label: {
                     Image(systemName: "arrow.uturn.backward")
                 }
-                .buttonStyle(.borderless)
+                // No `.buttonStyle(.borderless)`: it opts the button out of
+                // toolbar control metrics and collapses this whole item to 14pt
+                // beside 36pt native ones. `.secondary` on the count carries the
+                // hierarchy without shrinking anything.
                 .accessibilityLabel("Reset all layout overrides")
             }
             .help("\(count(model.overrideCount, "layout override")) in force. "

@@ -31,10 +31,11 @@ never calls it. Swift tests mirror the Python `tests/` as the parity contract.
   RenameUnit), `PlanBuilder` (build/replan/resolve), `ConflictChecker`,
   `QualityTag` (version labels for the resolver), `Executor` + `Trasher` (apply).
 - `MediaRenamer/MediaRenamer/` — `ContentView` (split-view shell + apply bar +
-  overrides indicator), `Sidebar` (rows + the layout chips), `Inspector`
+  overrides indicator), `Sidebar` (rows + the group layout chip), `Inspector`
   (editable fields, results, junk, conflict resolver — reports layout, doesn't
-  set it), `OutputModeUI` (mode vocabulary/colour/glyph + `ModeChip`),
-  `Palette` (colour legend), `AcronymBar`, `AppModel`.
+  set it), `OutputModeUI` (mode vocabulary/colour/glyph + `ModeChipFace`/
+  `ModeBadge`/`LayoutPicker`/`ModeChip`/`ItemModeMark`/`ItemLayoutMenu`/
+  `GlobalModePicker`), `Palette` (colour legend), `AcronymBar`, `AppModel`.
 - `SPEC.md` — full design + roadmap + known limitations. `README.md` — quickstart.
 
 ## Build / test / run

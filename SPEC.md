@@ -96,10 +96,10 @@ media-renamer/
       MediaRenamerApp.swift         # @main App
       AppModel.swift                # @Observable document model (choose/replan/resolve/apply)
       ContentView.swift             # NavigationSplitView shell + toolbar + bottom apply bar
-      Sidebar.swift                 # source list (All / TV / Movies / Unchanged / Skipped) + layout chips + flag badges
+      Sidebar.swift                 # source list (All / TV / Movies / Unchanged / Skipped) + layout marks/menus + flag badges
       Inspector.swift               # detail: editable fields, results, junk toggles, conflict resolver
       AcronymBar.swift              # acronym keep/Title chips
-      OutputModeUI.swift            # mode vocabulary/colour/glyph, the layout chip, global picker
+      OutputModeUI.swift            # mode vocabulary/colour/glyph, the layout chip/badge/picker, global picker
       Palette.swift                 # colour legend (categories + the two layout tints)
       Assets.xcassets
   SPEC.md  README.md  .gitignore
@@ -224,15 +224,46 @@ Verbatim behaviour from the earlier Python engine, pinned by parity tests:
     **survive an Apply** — the only edit layer that does — because applying in
     several passes over one staging folder is the workflow they serve.
   - Because the default flattens, the active mode is stated in the toolbar, on
-    every sidebar row, on each preview group's destination band, and in the
-    confirmation dialog (which also counts the source folders that will
-    disappear) — with **equal weight in both directions**, so neither mode is
-    the one you click through.
-  - All three levels are set **in the sidebar**: toolbar for the whole plan,
-    section header for a media kind, row for one item. One chip component serves
-    all of them, drawing a pinned level differently from an inheriting one. The
-    inspector reports the resolved mode and does not set it — the cascade reads
-    as one control at three scopes rather than two panes' worth of settings.
+    **any sidebar row whose layout differs from the toolbar's**, on each preview
+    group's destination band, and in the confirmation dialog (which also counts
+    the source folders that will disappear) — with **equal weight in both
+    directions**, so neither mode is the one you click through. The toolbar
+    states the global mode permanently and never scrolls, so a row only has to
+    speak when it is an exception to it: when it pins a mode of its own, or when
+    its group does. A plan with no overrides carries no row marks at all, and you
+    still cannot apply the wrong mode without being told.
+  - **Invariant — suppressing row marks is only safe while the toolbar picker
+    cannot disappear.** The rule above hides a row's mark whenever the row agrees
+    with the global layout (`AppModel.statesOwnLayout`), which spends the row's
+    silence on the toolbar's permanence: if the picker ever stopped being on
+    screen, a plan with no overrides would state its layout *nowhere*. Two
+    numbers in `ContentView` are what guarantee it, and they are load-bearing for
+    layout visibility rather than cosmetic tuning. The sidebar column is capped
+    at **half the window width**, which caps a split position that otherwise
+    persists across launches, so the detail region can never be dragged narrow
+    enough for the trailing `.primaryAction` items — the picker among them — to
+    collapse into a `»` overflow menu. Half is what makes the bound
+    self-maintaining rather than a number that has to be re-tuned: measured, both
+    trailing items need roughly `sidebar + 510` points, so a sidebar of `W/2` is
+    safe for every `W ≥ 1020`, at any window size and with no per-width
+    arithmetic. The window's `minWidth: 1160` then holds the window above that
+    floor with headroom for the toolbar's own content — restoring the longer
+    `Organise / Rename only` labels costs 68pt of intrinsic width, making the
+    requirement `W ≥ 1156`, which at 1020 would have reintroduced the overflow
+    invisibly. Loosen either bound and the marks stop being an exception system.
+  - The three levels: toolbar for the whole plan,
+    section header for a media kind, and — for one item — the **row's context
+    menu**, mirrored as **View ▸ Layout** on the selection (a season row's menu
+    targets its parent show, since layout is show-scoped). The row itself carries
+    a passive mark, not a control: a row shows state, and a three-way setting on
+    every row would be a control below the HIG's 20×20pt minimum sitting
+    unannounced among the `dup`/junk/verify status badges. Headers draw glyph +
+    word + chevron and act as the legend; row marks draw the **glyph alone**, so
+    both modes are one width and every mark shares one left and one right edge.
+    The pinned-vs-inheriting distinction (bordered and filled vs a soft wash)
+    holds on both. The inspector reports the resolved mode and does not set it —
+    the cascade reads as one setting at three scopes rather than two panes' worth
+    of settings.
   - Overrides are easy to lose track of (they survive an Apply, and an emptied
     group keeps its section on screen just to stay reachable), so the toolbar
     carries an **overrides count and a Reset All**, mirrored in the View menu.
@@ -257,10 +288,10 @@ features beyond the original MVP line:
 - **Apply:** real renames + empty-source cleanup + junk to the Trash, behind a
   confirm dialog, with a result summary; the folder re-scans afterward.
 - **Duplicate-version resolver** (beyond the original MVP scope).
-- **Layout modes:** Folders vs Flat, with a three-level cascade set entirely in
-  the sidebar (toolbar / section header / row), an overrides count and Reset All
-  beside the toolbar picker, a root-anchored destination band on every preview
-  group, and a mode-naming confirm dialog.
+- **Layout modes:** Folders vs Flat, with a three-level cascade
+  (toolbar / section header / row context menu, mirrored as View ▸ Layout), an
+  overrides count and Reset All beside the toolbar picker, a root-anchored
+  destination band on every preview group, and a mode-naming confirm dialog.
 
 Not yet: undo UI, online verification, a broader settings surface, packaging.
 
@@ -301,10 +332,12 @@ is a no-op rather than a re-flagged conflict.
   genuinely empty directory, so this is litter rather than risk, and it keeps the
   confirmation dialog's folder count from overstating what will actually go.
 - **macOS 26 chrome.** Resolved. The summary counts moved out of the toolbar
-  into colour-coded chips in the bottom bar, and the acronym bar is now a real
-  title-bar accessory (`NSTitlebarAccessoryViewController`) so the inspector
-  title clears it correctly on the first layout (the SwiftUI sibling-bar +
-  `NavigationSplitView` safe-area bug, `rdar://122947424`, no longer applies).
+  into colour-coded chips in the bottom bar, and the acronym bar now sits at the
+  **bottom** too — a divider-separated strip immediately above the apply bar. It
+  was briefly a real title-bar accessory (`NSTitlebarAccessoryViewController`),
+  to keep the inspector title clear of it on the first layout; a bottom sibling
+  sidesteps the SwiftUI sibling-bar + `NavigationSplitView` safe-area bug
+  (`rdar://122947424`) that forced that hack, so the accessory plumbing is gone.
 
 ---
 
@@ -320,8 +353,8 @@ is a no-op rather than a re-flagged conflict.
 | **M5 — Editable titles** | ✅ live re-plan on title/year edits; acronyms remembered |
 | **M5.5 — Duplicate resolver** | ✅ version-label resolution (new capability beyond the CLI) |
 | **M5.6 — Loose-file grouping** | ✅ scattered same-show (and movie-version) loose files group like a subfolder; merge into a matching subfolder; seasons shown as a sidebar Show → Season tree |
-| **M5.7 — Output modes** | ✅ rename-only (flat) alongside organise, chosen per plan / per media kind / per item; mode surfaced in the toolbar, rows, preview bands, and the confirm dialog |
-| **M5.8 — Junk scope + layout UX** | ✅ junk confined to nodes being renamed (safety fix); layout set entirely in the sidebar with one chip at three scopes; Folders/Flat vocabulary; a colour and glyph per mode; overrides count + Reset All; root-anchored destination bands with path/reveal |
+| **M5.7 — Output modes** | ✅ rename-only (flat) alongside organise, chosen per plan / per media kind / per item; mode surfaced in the toolbar, on the rows that differ from it, on preview bands, and in the confirm dialog |
+| **M5.8 — Junk scope + layout UX** | ✅ junk confined to nodes being renamed (safety fix); layout as one control at three scopes — toolbar, section header, and the row's context menu mirrored in View ▸ Layout — with rows carrying a passive mark; Folders/Flat vocabulary; a colour and glyph per mode; overrides count + Reset All; root-anchored destination bands with path/reveal |
 | **M6 — Undo** | ⬜ reverse the last applied batch (engine records moves; UI pending) |
 | **M7 — Online verify** | ⬜ opt-in TMDb/TVDB confirmation + cache |
 | **M8 — Package** | ⬜ notarised `.app`, app icon, double-click launch |
