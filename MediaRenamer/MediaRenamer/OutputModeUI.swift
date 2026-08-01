@@ -311,15 +311,16 @@ struct ItemModeMark: View {
 /// it is about to change while putting the three choices one click from the
 /// right-click. If a row ever gains a second unrelated command, this becomes a
 /// `Menu` again and the heading becomes its title — but not before.
-struct ItemLayoutMenu: View {
+struct ItemLayoutPicker: View {
     let node: NodePlan
     let model: AppModel
-    /// What the menu says it will change. **Required, with no default** — every
+    /// What the picker says it will change, drawn as its section heading.
+    /// **Required, with no default** — every
     /// caller must name its target. Season rows have to, because layout is
     /// show-scoped (one override per show, never per season) and a bare "Layout"
     /// there would misstate what it reaches. Item rows have to for a subtler
     /// reason: a right-click does not necessarily move `List` selection, so this
-    /// menu and its View ▸ Layout mirror can be pointed at different nodes at the
+    /// picker and its View ▸ Layout mirror can be pointed at different nodes at the
     /// same instant, and only one of them saying so is how a user changes the
     /// mode on a row they were not looking at. Naming the target also puts the
     /// axis word "Layout" one right-click away on every row, which is where it
@@ -408,9 +409,14 @@ struct ItemLayoutMenu: View {
 /// The pairing is carried instead by the mark's tooltip, the inspector badge,
 /// the section-header chip and the destination band — all of which draw glyph
 /// and word together. Whether that is enough at rest — none of the four is
-/// visible without hovering, selecting or scrolling to a header — is the open
-/// question, and it is a question about *teaching the marks*, not about this
-/// control.
+/// visible without hovering, selecting or scrolling to a header — was the open
+/// question, about *teaching the marks* rather than this control, and it was
+/// examined and **closed on 2026-08-01 (ux-polish-3)**: the pairing stays
+/// hover-taught, the bottom bar's layout chips add a standing glyph+word+tint
+/// summary accepted on its own merits as a plan summary (not a teaching
+/// surface), and no further teaching work is planned. Do not reopen it — no
+/// tips, hints, legends or other discoverability surface is deferred; they are
+/// crossed off.
 struct GlobalModePicker: View {
     let model: AppModel
 

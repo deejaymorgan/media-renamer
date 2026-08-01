@@ -34,7 +34,7 @@ never calls it. Swift tests mirror the Python `tests/` as the parity contract.
   overrides indicator), `Sidebar` (rows + the group layout chip), `Inspector`
   (editable fields, results, junk, conflict resolver — reports layout, doesn't
   set it), `OutputModeUI` (mode vocabulary/colour/glyph + `ModeChipFace`/
-  `ModeBadge`/`LayoutPicker`/`ModeChip`/`ItemModeMark`/`ItemLayoutMenu`/
+  `ModeBadge`/`LayoutPicker`/`ModeChip`/`ItemModeMark`/`ItemLayoutPicker`/
   `GlobalModePicker`), `Palette` (colour legend), `AcronymBar`, `AppModel`.
 - `SPEC.md` — full design + roadmap + known limitations. `README.md` — quickstart.
 

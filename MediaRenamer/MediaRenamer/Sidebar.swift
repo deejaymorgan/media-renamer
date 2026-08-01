@@ -235,9 +235,9 @@ struct ShowRow: View {
         .rowHover(selected: model.selection == .item(node.source))
         // Named, not a bare "Layout" — a right-click need not move the List's
         // selection, so this menu and its View ▸ Layout mirror can point at
-        // different rows at once. See `ItemLayoutMenu.title`.
+        // different rows at once. See `ItemLayoutPicker.title`.
         .contextMenu {
-            ItemLayoutMenu(node: node, model: model,
+            ItemLayoutPicker(node: node, model: model,
                            title: "Layout — “\(node.displayTitle)”")
         }
     }
@@ -277,7 +277,7 @@ struct SeasonRow: View {
         // because a right-click that produced nothing here would teach the user
         // that seasons have no layout rather than that shows own it.
         .contextMenu {
-            ItemLayoutMenu(node: show, model: model,
+            ItemLayoutPicker(node: show, model: model,
                            title: "Layout — “\(show.displayTitle)”")
         }
     }
@@ -332,9 +332,9 @@ struct SidebarRow: View {
         .rowHover(selected: model.selection == .item(node.source))
         // Named, not a bare "Layout" — a right-click need not move the List's
         // selection, so this menu and its View ▸ Layout mirror can point at
-        // different rows at once. See `ItemLayoutMenu.title`.
+        // different rows at once. See `ItemLayoutPicker.title`.
         .contextMenu {
-            ItemLayoutMenu(node: node, model: model,
+            ItemLayoutPicker(node: node, model: model,
                            title: "Layout — “\(node.displayTitle)”")
         }
     }
@@ -382,9 +382,9 @@ struct PinnedRow: View {
         .rowHover(selected: model.selection == .item(node.source))
         // Named, not a bare "Layout" — a right-click need not move the List's
         // selection, so this menu and its View ▸ Layout mirror can point at
-        // different rows at once. See `ItemLayoutMenu.title`.
+        // different rows at once. See `ItemLayoutPicker.title`.
         .contextMenu {
-            ItemLayoutMenu(node: node, model: model,
+            ItemLayoutPicker(node: node, model: model,
                            title: "Layout — “\(node.displayTitle)”")
         }
     }
