@@ -395,13 +395,22 @@ struct ItemLayoutMenu: View {
 /// 1059d8e's rule that the layout words appear on every surface, segments
 /// included; so words win and the glyph does not appear here. Do not retry this
 /// with another label style — the control is `NSSegmentedControl` underneath and
-/// takes one of title *or* image per segment. Reaching glyph + word would mean
-/// bridging to AppKit for a real `NSSegmentedControl`, which buys a legend at the
-/// cost of the "one system control per toolbar item" rule.
+/// takes one of title *or* image per segment.
+///
+/// **Closed, not pending.** Glyph + word here would need an `NSViewRepresentable`
+/// around a real `NSSegmentedControl`, and the app stays in SwiftUI (Daniel,
+/// 2026-08-01). So this surface will not become the legend, and the same ruling
+/// settles the segments' uneven widths — `Folders` is about twice the string
+/// `Flat` is, that is content-fit behaviour, and equalising it needs
+/// `segmentDistribution` on the same bridge. Both are accepted as they are
+/// rather than deferred.
 ///
 /// The pairing is carried instead by the mark's tooltip, the inspector badge,
 /// the section-header chip and the destination band — all of which draw glyph
-/// and word together.
+/// and word together. Whether that is enough at rest — none of the four is
+/// visible without hovering, selecting or scrolling to a header — is the open
+/// question, and it is a question about *teaching the marks*, not about this
+/// control.
 struct GlobalModePicker: View {
     let model: AppModel
 
