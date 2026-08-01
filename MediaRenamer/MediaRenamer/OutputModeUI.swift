@@ -360,9 +360,10 @@ struct ItemLayoutPicker: View {
 /// in an outer pill around the control; it sits *level with the segments, inside
 /// the picker's own frame*, and reads as an inert third segment that happens to
 /// do nothing when clicked. The visible `Layout` caption that used to lead this
-/// item is gone for that reason, and the tooltip now opens with the word, since
-/// it became the place the axis is named. Anything else added back into this
-/// item will land inside the segments again.
+/// item is gone for that reason, and anything else added back into this item
+/// will land inside the segments again. The axis word lives in the picker's
+/// accessibility label, in View ▸ Layout and the context menus, and in the chip
+/// and mark tooltips; hover on this control names the modes, one per segment.
 ///
 /// **The width is the control's own.** A hardcoded one is a landmine: the
 /// previous `190` was 18pt *narrower* than `Organise / Rename only`'s 208pt
@@ -449,8 +450,14 @@ struct GlobalModePicker: View {
         // accessibility elements into one, which would cost VoiceOver the
         // ability to move between the two segments. `ModeBadge` is the opposite
         // case and labels itself deliberately: it is a leaf, not a container.
-        .help("Layout — how every item is laid out under the chosen folder. "
-              + "The TV and Movies headers override it for a media kind; "
-              + "right-click a row, or use View ▸ Layout, for one item.")
+        //
+        // And no container `.help` (removed 2026-08-01, read off a running
+        // window): a `.help` on the Picker *suppresses* the per-segment ones
+        // above — one tooltip per control, and the container's wins — so for a
+        // round both were attached and only the cascade sentence ever showed.
+        // The per-segment tooltips are the ones this control promised. The
+        // cascade sentence lives on in the surfaces that own its content: the
+        // header chips' and row marks' tooltips, the row context menus, and
+        // View ▸ Layout.
     }
 }
