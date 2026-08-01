@@ -355,6 +355,7 @@ is a no-op rather than a re-flagged conflict.
 | **M5.6 — Loose-file grouping** | ✅ scattered same-show (and movie-version) loose files group like a subfolder; merge into a matching subfolder; seasons shown as a sidebar Show → Season tree |
 | **M5.7 — Output modes** | ✅ rename-only (flat) alongside organise, chosen per plan / per media kind / per item; mode surfaced in the toolbar, on the rows that differ from it, on preview bands, and in the confirm dialog |
 | **M5.8 — Junk scope + layout UX** | ✅ junk confined to nodes being renamed (safety fix); layout as one control at three scopes — toolbar, section header, and the row's context menu mirrored in View ▸ Layout — with rows carrying a passive mark; Folders/Flat vocabulary; a colour and glyph per mode; overrides count + Reset All; root-anchored destination bands with path/reveal |
+| **M5.9 — Layout chips + close-out** | ✅ bottom-bar layout chips — the plan's shape as item counts, glyph + word + tint single-sourced from the mode vocabulary; layout-discoverability inquiry closed (2026-08-01: pairing stays hover-taught, no further teaching surface); the stale menu-named row-layout type renamed to `ItemLayoutPicker`; committed fixture script `scripts/make-scratch.sh` + one recorded end-to-end Apply |
 | **M6 — Undo** | ⬜ reverse the last applied batch (engine records moves; UI pending) |
 | **M7 — Online verify** | ⬜ opt-in TMDb/TVDB confirmation + cache |
 | **M8 — Package** | ⬜ notarised `.app`, app icon, double-click launch |
