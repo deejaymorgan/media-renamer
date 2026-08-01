@@ -71,10 +71,9 @@ struct ContentView: View {
                         GlobalModePicker(model: model)
                     }
                     // Sits after the picker because it qualifies it: "…and N
-                    // places are ignoring this."
-                    ToolbarItem(placement: .primaryAction) {
-                        OverridesIndicator(model: model)
-                    }
+                    // places are ignoring this." Provides its own toolbar items
+                    // — the count and the reset button are separate ones now.
+                    OverridesIndicator(model: model)
                 }
             }
 
@@ -233,50 +232,68 @@ private func count(_ n: Int, _ noun: String) -> String {
 /// control stays reachable. Both make it easy to be running a layout you no
 /// longer remember choosing, in a place you would have to go looking for. This
 /// is the folder-independent surface that says so and undoes it.
-struct OverridesIndicator: View {
+///
+/// **The count is status and wears no glass (decided 2026-08-01).** Count and
+/// button used to share one toolbar item, fused inside a single glass capsule —
+/// which dressed an inert string as half of a control. WWDC25's macOS design
+/// session (310) is direct about exactly that arrangement: "Non-interactive
+/// items like custom titles and status indicators should avoid the glass
+/// material. … With the glass material backing, it almost looks like a button."
+/// So the count is its own toolbar item with its glass hidden
+/// (`sharedBackgroundVisibility(.hidden)` — Apple's own doc example de-glasses
+/// an inert `BuildStatus()` view), a fixed `ToolbarSpacer` holds the gap, and
+/// the reset button stands alone on the glass. The *placement* survives on the
+/// HIG's feedback guidance: status belongs beside the control that clears it,
+/// as with Mail's toolbar count. The hand-measured interior padding that
+/// balanced the old shared capsule (14/7/14) went with the capsule — the
+/// system now owns every inset, so none of its numbers can go stale. Do not
+/// re-fuse the pair for tidiness. Before macOS 26 there is no glass container
+/// to decline, so the pair simply shares one unpadded item there.
+struct OverridesIndicator: ToolbarContent {
     let model: AppModel
 
-    var body: some View {
+    @ToolbarContentBuilder
+    var body: some ToolbarContent {
         if model.overrideCount > 0 {
-            // `spacing: 0`, deliberately. The button keeps toolbar control
-            // metrics (see below), which means it already carries the system's
-            // own horizontal padding around its glyph. Any `spacing` here lands
-            // *on top of* that padding, and only on the count's trailing side —
-            // so the old 6 made the gap inside the capsule wider than the
-            // capsule's own end insets, and the pair read as two things placed
-            // near each other rather than one item. Letting the button's padding
-            // be the whole separation is also the value that cannot go stale:
-            // it is the system's, not a number matched to today's metrics.
-            HStack(spacing: 0) {
-                Text(count(model.overrideCount, "override"))
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-                    // Balances the button's own trailing padding at the other
-                    // end. Measured by tinting both children and reading their
-                    // frames off a running window: the item's glass container
-                    // insets its contents by ~7pt, and the button's frame is
-                    // ~7pt wider than its glyph on each side. Those stack only
-                    // on the trailing edge, so without this the interior runs
-                    // 7 / 7 / 14 — the arrow sitting with twice the room the
-                    // count gets — and the item reads as leaning left. With it,
-                    // 14 / 7 / 14: symmetric ends, and a gap tighter than both,
-                    // which is what makes the count and the arrow read as one
-                    // item rather than two.
-                    .padding(.leading, 7)
-                Button {
-                    model.resetAllOverrides()
-                } label: {
-                    Image(systemName: "arrow.uturn.backward")
+            if #available(macOS 26.0, *) {
+                ToolbarItem(placement: .primaryAction) {
+                    countLabel
                 }
-                // No `.buttonStyle(.borderless)`: it opts the button out of
-                // toolbar control metrics and collapses this whole item to 14pt
-                // beside 36pt native ones. `.secondary` on the count carries the
-                // hierarchy without shrinking anything.
-                .accessibilityLabel("Reset all layout overrides")
+                .sharedBackgroundVisibility(.hidden)
+                ToolbarSpacer(.fixed, placement: .primaryAction)
+                ToolbarItem(placement: .primaryAction) {
+                    resetButton
+                }
+            } else {
+                ToolbarItem(placement: .primaryAction) {
+                    HStack(spacing: 0) {
+                        countLabel
+                        resetButton
+                    }
+                }
             }
-            .help("\(count(model.overrideCount, "layout override")) in force. "
-                  + "Reset returns every TV, Movies and row setting to inheriting.")
         }
+    }
+
+    private var countLabel: some View {
+        Text(count(model.overrideCount, "override"))
+            .foregroundStyle(.secondary)
+            .monospacedDigit()
+            .help("\(count(model.overrideCount, "layout override")) in force.")
+    }
+
+    private var resetButton: some View {
+        Button {
+            model.resetAllOverrides()
+        } label: {
+            Image(systemName: "arrow.uturn.backward")
+        }
+        // No `.buttonStyle(.borderless)`: it opts the button out of toolbar
+        // control metrics and collapses its item to 14pt beside 36pt native
+        // ones. `.secondary` on the count carries the hierarchy without
+        // shrinking anything.
+        .accessibilityLabel("Reset all layout overrides")
+        .help("Reset returns every TV, Movies and row setting to inheriting.")
     }
 }
 

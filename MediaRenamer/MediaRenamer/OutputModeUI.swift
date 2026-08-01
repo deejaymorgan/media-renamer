@@ -345,12 +345,13 @@ struct ItemLayoutPicker: View {
 ///
 /// **One hit target per toolbar item, sized by the system.** The rule is about
 /// what can be *pressed*, not about how many views are present: the sibling
-/// `OverridesIndicator` pairs an inert count with one button in a single item and
-/// satisfies it, because the count is a status string and not a second control.
-/// (Merging the two into one wide `Label` button would break the rule the other
-/// way, by giving an action with no undo a 114pt target.) What the toolbar's
-/// control metrics and its overflow arithmetic care about is the pressable
-/// region, so that is what the rule counts.
+/// `OverridesIndicator` splits its inert count into a glassless item of its own
+/// (see there for the WWDC25 ruling), leaving the reset button alone on glass,
+/// so on macOS 26 what wears a control's dress and what can be pressed are the
+/// same set. (Merging count and button into one wide `Label` button would break
+/// the rule the other way, by giving an action with no undo a 114pt target.)
+/// What the toolbar's control metrics and its overflow arithmetic care about is
+/// the pressable region, so that is what the rule counts.
 ///
 /// **The item is the control and nothing else.** On macOS 26 the segmented
 /// picker draws no border of its own — no dividers, no surrounding capsule, just
