@@ -376,35 +376,37 @@ struct ItemLayoutPicker: View {
 /// VoiceOver announced as a second one. Do not add a visible caption back — see
 /// above for what it renders as.
 ///
-/// **The segments are words only, and not for want of trying.** Adding the mode
-/// glyph here was wanted: the sidebar's row marks are glyph-only, so the
-/// glyph→mode pairing needs teaching somewhere permanent, and this is the only
-/// layout surface that never scrolls — `List` section headers do not stick
-/// (probed: `floatsGroupRows == false`), so the header chip is off screen on
-/// exactly the scrolled-override screen the marks exist for.
+/// **The segments are symbols only (2026-08-01, superseding 39a37bd's word-only
+/// ruling — Daniel's call, on sourced platform guidance).** Two facts changed
+/// together. First, the HIG treats equal-width segments as the intended look
+/// ("when all segments have equal width, a segmented control feels balanced")
+/// and prescribes similar-sized *content*, never content-fit widths, when a
+/// short label swims beside a long one — which is exactly how `Folders / Flat`
+/// rendered on macOS 26, with no supported SwiftUI knob to change it
+/// (`NSSegmentedControl.segmentDistribution` is not exposed; frame tricks on
+/// segments are silently ignored). Second, the words no longer need this
+/// surface: the bottom bar's layout chips (M5.9) put glyph + word + tint on
+/// screen at rest whenever a plan exists, so 1059d8e's vocabulary rule is met
+/// by a standing surface while the segments follow the toolbar HIG's "prefer
+/// simple, recognizable symbols… instead of text" — the Finder/Notes
+/// view-switcher pattern, where near-equal symbol widths make the equal-width
+/// rendering invisible. The words stay on this control through each segment's
+/// `Label` title and tooltip.
 ///
-/// A macOS segmented `Picker` will not draw a glyph and a word in one segment.
-/// Three constructions, all built and read off a running window (2026-08-01):
+/// A macOS segmented `Picker` still takes one of title *or* image per segment —
+/// glyph **and** word together remains impossible without an
+/// `NSSegmentedControl` bridge, and the app stays in SwiftUI (Daniel,
+/// 2026-08-01). Three constructions, all built and read off a running window
+/// (2026-08-01):
 ///
 /// | segment content | renders as |
 /// |---|---|
-/// | `Label(name, systemImage:)` | **icon only** — the words vanish |
+/// | `Label(name, systemImage:)` | **icon only** — the title is supplied but not drawn |
 /// | the same, `.labelStyle(.titleAndIcon)` | **text only** — the glyph vanishes |
 /// | `HStack { Image; Text }` | **mangled** — the glyph is promoted to its own third segment |
 ///
-/// Icon-only is the one outcome 39a37bd explicitly rejected, since it reverses
-/// 1059d8e's rule that the layout words appear on every surface, segments
-/// included; so words win and the glyph does not appear here. Do not retry this
-/// with another label style — the control is `NSSegmentedControl` underneath and
-/// takes one of title *or* image per segment.
-///
-/// **Closed, not pending.** Glyph + word here would need an `NSViewRepresentable`
-/// around a real `NSSegmentedControl`, and the app stays in SwiftUI (Daniel,
-/// 2026-08-01). So this surface will not become the legend, and the same ruling
-/// settles the segments' uneven widths — `Folders` is about twice the string
-/// `Flat` is, that is content-fit behaviour, and equalising it needs
-/// `segmentDistribution` on the same bridge. Both are accepted as they are
-/// rather than deferred.
+/// The first row was this table's failure mode when the segments carried
+/// words; it is now the construction in use, on purpose.
 ///
 /// The pairing is carried instead by the mark's tooltip, the inspector badge,
 /// the section-header chip and the destination band — all of which draw glyph
@@ -426,19 +428,16 @@ struct GlobalModePicker: View {
             set: { model.setGlobalMode($0) }
         )) {
             ForEach(OutputMode.allCases, id: \.self) { mode in
-                // Glyph *and* word. The sidebar's row marks are glyph-only —
-                // four capsules repeating one word is noise — which leaves the
-                // glyph→mode pairing to be taught somewhere permanent, and the
-                // section-header chip cannot be that somewhere: macOS `List`
-                // headers do not stick (probed: `floatsGroupRows == false`), so
-                // on the one screen the marks exist for — an override, scrolled
-                // — the legend is off screen by construction. This item never
-                // scrolls, so it is the legend. Teach the pairing where there is
-                // room, abbreviate where there is not; Finder tags and Mail
-                // flags do the same. Not the icon-only segments 39a37bd
-                // rejected: the word stays in both, so 1059d8e's rule that the
-                // layout words appear on every surface still holds literally.
-                Text(mode.name).tag(mode)
+                // Symbol-only segments, Finder-style — see the header comment
+                // for why this superseded the word-only ruling. `Label` is the
+                // deliberate construction: a macOS segmented picker draws only
+                // its image, but the title is still supplied to the framework
+                // rather than discarded by us. The tooltip composes the same
+                // sentence the bottom-bar chips use, so hover names the mode
+                // in the one vocabulary everywhere.
+                Label(mode.name, systemImage: mode.symbol)
+                    .tag(mode)
+                    .help("\(mode.name) — files land \(mode.detail).")
             }
         }
         .pickerStyle(.segmented)
