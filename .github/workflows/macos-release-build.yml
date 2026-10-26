@@ -1,0 +1,74 @@
+name: macOS release build
+
+# Builds the ad-hoc-signed, un-notarised release candidate (zip + DMG) on a
+# GitHub-hosted Mac, after running the engine suite, and smoke-launches the app.
+# Produces workflow artifacts only: it never tags, releases or publishes.
+
+on:
+  push:
+    branches:
+      - claude/stoic-fermi-ilcpzl
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          sw_vers
+          xcode-select -p
+          xcodebuild -version
+          swift --version
+
+      - name: Engine tests
+        run: swift test --package-path RenamerCore
+
+      - name: Package (ad-hoc signed zip)
+        run: ./scripts/package-unsigned.sh
+
+      - name: Package (DMG)
+        run: ./scripts/make-dmg.sh
+
+      - name: Check built version and signature
+        run: |
+          APP=build/dd/Build/Products/Release/MediaRenamer.app
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Contents/Info.plist"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -dvv "$APP" 2>&1 | grep -q 'Signature=adhoc'
+          lipo -archs "$APP/Contents/MacOS/MediaRenamer"
+          ls -l build/MediaRenamer-unsigned.zip build/MediaRenamer-*.dmg
+          shasum -a 256 build/MediaRenamer-unsigned.zip build/MediaRenamer-*.dmg
+
+      - name: Smoke launch (from the DMG)
+        run: |
+          MNT="$(mktemp -d)"
+          hdiutil attach -nobrowse -readonly -mountpoint "$MNT" build/MediaRenamer-*.dmg
+          open "$MNT/MediaRenamer.app"
+          sleep 10
+          if pgrep -x MediaRenamer >/dev/null; then
+            echo "MediaRenamer is running after 10 s"
+          else
+            echo "::error::MediaRenamer is not running 10 s after launch"
+            ls -t ~/Library/Logs/DiagnosticReports 2>/dev/null | head || true
+            exit 1
+          fi
+          osascript -e 'tell application id "'"$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$MNT/MediaRenamer.app/Contents/Info.plist")"'" to quit' || true
+          sleep 3
+          pkill -x MediaRenamer || true
+          hdiutil detach "$MNT" || hdiutil detach -force "$MNT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MediaRenamer-release-candidate
+          path: |
+            build/MediaRenamer-unsigned.zip
+            build/MediaRenamer-*.dmg
+          if-no-files-found: error

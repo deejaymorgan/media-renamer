@@ -364,6 +364,12 @@ is a no-op rather than a re-flagged conflict.
 
 Parity with the old CLI was reached at **M4**; everything after is new capability.
 
+**After 1.3.0:** the fix-and-hardening work from the post-release code review
+(CI, Trash defaults, organised-library detection, parsing, state across Apply,
+performance, docs) is tracked in
+[#11 — Roadmap after 1.3.0](https://github.com/deejaymorgan/media-renamer/issues/11),
+one issue per step, in recommended order.
+
 ---
 
 ## 8. Data Model (engine)
